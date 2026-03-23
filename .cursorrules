@@ -1,0 +1,277 @@
+# Project AI Rules
+
+## 1. 项目定位
+
+这是一个 **Electron + React + TypeScript + Vite** 的桌面应用。
+默认将代码分为四层：
+
+- `main`：Electron 主进程。负责窗口、生命周期、菜单、对话框、文件系统、系统能力、日志、数据库、设置存储、打包/更新对接、IPC handler。
+- `preload`：唯一允许把能力桥接给渲染层的位置。必须是最小暴露、显式方法、强类型、可验证参数。
+- `renderer`：React 应用。负责 UI、交互、路由、表单、状态、查询，不直接接触 Node/Electron/SQLite。
+- `shared`：跨层共享的 DTO、Zod schema、IPC 合约、常量、错误码、类型。
+
+如果仓库真实结构与以上不同，**遵循仓库现有结构，不要为了“更标准”而硬重构**。
+
+## 2. 总体原则
+
+- 所有新代码优先使用 TypeScript。
+- 优先做 **最小改动**，不要为了修一个小问题顺手大重构。
+- 除非框架约定要求，否则优先 **named export**。
+- 不要引入新依赖，除非现有技术栈明显无法完成需求，且理由充分。
+- 不要编造命令、环境变量、脚本名、打包配置、路径别名；先看仓库现状。
+- 不要篡改用户未要求的格式化、lint、测试或构建配置。
+- 不要修改锁文件，除非确实新增/升级依赖。
+
+## 3. TypeScript 规范
+
+- 保持严格类型；避免 `any`。
+- 不使用 `as any`、`as unknown as` 作为逃生门。
+- 非空断言 `!` 仅在充分确定安全时使用，并在附近说明原因。
+- 优先使用 `type` / 字面量联合；只有在确有互操作需求时再使用 `enum`。
+- 函数参数、返回值、公共 API、IPC 载荷必须显式可读。
+- 共享类型尽量来自单一来源，不要在多层重复定义同一结构。
+
+## 4. Electron 分层边界
+
+### renderer 禁止事项
+
+- 不直接 import `electron`
+- 不直接 import Node 内置模块，如 `fs`, `path`, `os`, `child_process`
+- 不直接 import `better-sqlite3`
+- 不直接操作本地文件、shell、系统对话框、原生菜单、系统托盘
+
+### preload 职责
+
+- 只暴露渲染层真正需要的方法
+- 一种能力对应一个明确方法
+- 对参数做验证或最少做形状约束
+- 提供清晰的 TypeScript 类型声明
+- 不把原始 `ipcRenderer.send` / `invoke` 整体透传给渲染层
+
+### main 职责
+
+- 所有高权限操作都在主进程完成
+- IPC handler 放在主进程注册
+- 文件系统、SQLite、系统菜单、窗口管理、日志、设置存储都在这里落地
+- 对来自渲染层的输入一律视为不可信，先校验再执行
+
+## 5. 安全红线
+
+- 保持 `contextIsolation` 开启
+- 不为渲染层启用 `nodeIntegration`
+- 不把 Electron / Node 高权限 API 直接暴露给网页上下文
+- 不执行远程不可信代码
+- 不对不可信内容使用 `shell.openExternal`
+- 不滥用 `dangerouslySetInnerHTML`
+- 不新增 `eval`, `new Function`, 动态脚本拼接
+- 不关闭 `webSecurity`
+- 所有 IPC 输入、持久化输入、表单输入、外部文件输入都应在边界处验证
+
+## 6. React / Renderer 规则
+
+- 使用函数组件和 hooks
+- 页面组件尽量薄，复杂逻辑下沉到 hook / service / query
+- 路由页负责组合，不负责堆业务细节
+- 组件优先可读、可测、可复用，不做过度抽象
+- 复杂条件渲染拆成具名变量或子组件
+- 样式优先 Tailwind CSS
+- 除非是运行时动态值，否则不要用内联 style 替代 Tailwind
+- 相同的 class 组合频繁出现时再提取组件或样式辅助函数
+- 组件默认考虑可访问性：语义标签、键盘可操作性、必要的 aria 属性
+
+## 7. React Router 规则
+
+- 路由负责页面边界与导航，不承担底层数据访问实现
+- 路由常量、路径参数、面包屑元数据应尽量集中管理
+- 新页面要考虑：空态、加载态、错误态、无权限态
+- 避免在多个页面重复拼接相同导航逻辑
+
+## 8. Zustand 规则
+
+Zustand 只用于：
+
+- UI 状态
+- 轻量本地状态
+- 用户交互态
+- 跨组件但非服务端缓存的数据
+
+不要把以下内容主要存进 Zustand：
+
+- 会被重新拉取和失效管理的异步数据
+- 列表查询缓存
+- 后端/数据库资源的主副本
+
+这类数据优先交给 TanStack Query。
+
+## 9. TanStack Query 规则
+
+- 异步读写、缓存、失效、重新获取交给 TanStack Query
+- 不要把 Query 的数据再复制一份到 Zustand
+- query key 必须稳定、可组合、可读
+- 对用户可感知的数据流，显式设置 `staleTime`、`enabled`、`retry`、失效策略
+- 组件中不要随手写重复 query；优先抽成 query hook / query options
+- mutation 完成后要明确失效哪些 query
+- 错误要可呈现，不要静默吞掉
+
+## 10. React Hook Form + Zod 规则
+
+- 表单以 schema 为中心
+- 优先用 Zod 定义输入约束，再从 schema 推导类型
+- 默认值 `defaultValues` 要显式
+- 字段错误展示贴近输入项
+- 不要在 UI、submit handler、数据库层分别写三套不一致的校验逻辑
+- 服务端/主进程返回的业务错误要映射为用户可理解的信息
+
+## 11. electron-store 规则
+
+适合存：
+
+- 用户偏好
+- 窗口尺寸/位置
+- 最近打开记录
+- 轻量设置
+- 本地 flags
+
+不适合存：
+
+- 大体量结构化业务数据
+- 关系型数据
+- 高频复杂查询数据
+
+补充要求：
+
+- key 命名要命名空间化
+- 新增配置项时要提供默认值
+- 配置结构演进要考虑迁移
+- 敏感信息不要明文乱存，除非项目已有明确安全策略
+
+## 12. better-sqlite3 / 数据库规则
+
+- SQLite 只允许在主进程使用
+- 所有 SQL 通过 repository / data access 层集中管理
+- 不在 React 组件里写 SQL
+- 使用预编译语句和事务
+- 启动时显式设置数据库 pragma（至少考虑 `journal_mode = WAL` 和 `foreign_keys = ON`）
+- schema 变更必须走迁移
+- 表名/列名建议 `snake_case`
+- TypeScript 领域对象建议 `camelCase`
+- 在仓储层完成映射，不把数据库结构直接泄漏到 UI
+
+## 13. 日志规则
+
+- 使用统一日志封装，底层可接 `electron-log`
+- 日志要带上下文：模块、动作、关键 ID
+- 不打印 token、密码、密钥、完整隐私数据
+- 生产代码不要到处散落 `console.log`
+- 对可恢复错误记录 warning，对不可恢复错误记录 error，并给出可追踪上下文
+
+## 14. 测试策略
+
+### Vitest 负责
+
+- 纯函数
+- 工具函数
+- Zod schema
+- store 逻辑
+- query 辅助逻辑
+- React hooks
+- 轻量组件与集成
+- repository / service 的行为验证
+
+### Playwright 负责
+
+- 首次启动
+- 主流程导航
+- 设置保存与恢复
+- 数据库驱动的关键 CRUD 流程
+- 打包后冒烟测试（若 CI 资源允许）
+
+### 测试要求
+
+- 修改行为时，同步更新测试
+- 使用稳定选择器，优先 `data-testid`
+- 测试名描述行为，不描述实现细节
+- 避免脆弱的时间等待；优先等待可观察状态
+
+## 15. Git / Commit / Hook 规则
+
+- 遵循 Conventional Commits
+- 推荐前缀：`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `build`
+- Husky / lint-staged / commitlint 以“快”为优先，除非被要求不要扩展过重逻辑
+- 不在一次修改里混入无关格式化噪音
+
+## 16. GitHub Actions 规则
+
+- 工作流应可复现、最小权限、可缓存
+- 优先复用现有脚本，不在 workflow 里复制复杂命令逻辑
+- matrix 要清晰，不要无意义扩大平台范围
+- CI 至少覆盖：安装、类型检查、lint、单元测试
+- E2E 只在资源允许且稳定时运行；否则拆成独立工作流
+- 发布流程与 PR 校验流程分离
+
+## 17. 当 AI 修改代码时，必须遵守的执行顺序
+
+1. 先理解需求影响的是哪一层：`main / preload / renderer / shared / db / tests / ci`
+2. 先检查现有模式，不要凭空创造新的目录结构和编码风格
+3. 优先复用已有 hook、query、store、service、repository
+4. 非 trivial 变更先列出最小受影响文件
+5. 改代码时保持边界清晰
+6. 完成后补齐：类型、错误处理、测试、必要文档
+7. 最后给出验证方式和风险说明
+
+## 18. 典型改动的最小交付面
+
+### 新增一个 IPC 能力时
+
+通常至少涉及：
+
+- shared：请求/响应类型、schema、channel 常量
+- main：handler 实现
+- preload：桥接暴露
+- renderer：调用 hook / service / component
+- tests：主进程或桥接相关测试
+
+### 新增一个数据库实体时
+
+通常至少涉及：
+
+- migration
+- repository
+- 领域类型 / schema
+- IPC 暴露（如果渲染层需要）
+- query / mutation hook
+- UI 页面或组件
+- 测试
+
+### 新增一个设置项时
+
+通常至少涉及：
+
+- store 默认值
+- 读取/写入接口
+- 迁移兼容（如已有版本用户会受影响）
+- 设置页 UI
+- 相关测试
+
+## 19. 输出格式偏好
+
+在回答代码修改建议时，尽量使用这个顺序：
+
+1. 目标
+2. 受影响层
+3. 计划修改的文件
+4. 关键风险
+5. 改动说明
+6. 验证方式
+7. 假设项
+
+## 20. 明确不要做的事
+
+- 不为了“更优雅”把现有同步/异步模式全部重写
+- 不擅自把 Zustand 改成别的状态库
+- 不擅自把 React Router 改成别的路由库
+- 不擅自把 `better-sqlite3` 改成 ORM
+- 不擅自把 `electron-store` 变成大对象仓库
+- 不擅自把 Tailwind 全改成 CSS Modules / styled-components
+- 不擅自修改打包目标、签名、更新策略
+- 不擅自扩大 Electron 权限边界
