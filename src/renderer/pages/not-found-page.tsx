@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 export function NotFoundPage() {
   return (
-    <div className="rounded-[30px] border border-white/70 bg-white/85 p-10 shadow-panel">
+    <div className="rounded-[30px] border border-white/70 bg-white dark:bg-slate-950/85 p-10 shadow-panel">
       <p className="text-xs uppercase tracking-[0.32em] text-stone-500">Not found</p>
       <h2 className="mt-4 font-display text-5xl text-stone-950">This route is not part of the desktop shell.</h2>
       <p className="mt-4 max-w-2xl text-base leading-7 text-stone-700">

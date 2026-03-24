@@ -41,7 +41,7 @@ export function SettingsPage() {
   })
 
   if (settingsQuery.isLoading) {
-    return <div className="rounded-[28px] border border-white/70 bg-white/75 p-8 text-sm text-stone-600">Loading settings...</div>
+    return <div className="rounded-[28px] border border-white/70 bg-white dark:bg-slate-950/75 p-8 text-sm text-stone-600">Loading settings...</div>
   }
 
   if (settingsQuery.isError) {
@@ -83,7 +83,7 @@ export function SettingsPage() {
               <span className="text-xs uppercase tracking-[0.28em] text-stone-500">Workspace name</span>
               <input
                 {...register('workspaceName')}
-                className="mt-3 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-900 outline-none transition focus:border-amber-400"
+                className="mt-3 w-full rounded-2xl border border-stone-200 bg-white dark:bg-slate-950 px-4 py-3 text-base text-stone-900 outline-none transition focus:border-amber-400"
                 placeholder="Northstar Desk"
                 data-testid="workspace-name-input"
               />
@@ -92,14 +92,14 @@ export function SettingsPage() {
 
             <div className="rounded-3xl border border-stone-200/80 bg-stone-50/80 p-5">
               <p className="text-xs uppercase tracking-[0.28em] text-stone-500">Operational switches</p>
-              <label className="mt-4 flex items-start gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3">
+              <label className="mt-4 flex items-start gap-3 rounded-2xl border border-stone-200 bg-white dark:bg-slate-950 px-4 py-3">
                 <input type="checkbox" className="mt-1 h-4 w-4" {...register('launchOnStartup')} />
                 <span>
                   <span className="block text-sm font-semibold text-stone-900">Launch on startup</span>
                   <span className="mt-1 block text-sm text-stone-600">Reserve a dedicated startup behavior flag for later system integration.</span>
                 </span>
               </label>
-              <label className="mt-3 flex items-start gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3">
+              <label className="mt-3 flex items-start gap-3 rounded-2xl border border-stone-200 bg-white dark:bg-slate-950 px-4 py-3">
                 <input type="checkbox" className="mt-1 h-4 w-4" {...register('sidebarCollapsed')} />
                 <span>
                   <span className="block text-sm font-semibold text-stone-900">Keep sidebar collapsed</span>
@@ -114,7 +114,7 @@ export function SettingsPage() {
               <p className="text-xs uppercase tracking-[0.28em] text-stone-500">Theme</p>
               <div className="mt-4 space-y-3">
                 {themeOptions.map((option) => (
-                  <label key={option.value} className="flex gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4">
+                  <label key={option.value} className="flex gap-3 rounded-2xl border border-stone-200 bg-white dark:bg-slate-950 px-4 py-4">
                     <input type="radio" value={option.value} className="mt-1 h-4 w-4" {...register('theme')} />
                     <span>
                       <span className="block text-sm font-semibold text-stone-900">{option.label}</span>
@@ -129,7 +129,7 @@ export function SettingsPage() {
               <p className="text-xs uppercase tracking-[0.28em] text-stone-500">Density</p>
               <div className="mt-4 space-y-3">
                 {densityOptions.map((option) => (
-                  <label key={option.value} className="flex gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4">
+                  <label key={option.value} className="flex gap-3 rounded-2xl border border-stone-200 bg-white dark:bg-slate-950 px-4 py-4">
                     <input type="radio" value={option.value} className="mt-1 h-4 w-4" {...register('density')} />
                     <span>
                       <span className="block text-sm font-semibold text-stone-900">{option.label}</span>

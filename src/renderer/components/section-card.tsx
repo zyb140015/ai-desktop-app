@@ -19,7 +19,7 @@ export function SectionCard({
   return (
     <section
       className={[
-        'rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_22px_60px_rgba(86,63,42,0.08)] backdrop-blur',
+        'rounded-[28px] border border-white/70 bg-white dark:bg-slate-950/80 p-6 shadow-[0_22px_60px_rgba(86,63,42,0.08)] backdrop-blur',
         className,
       ]
         .filter(Boolean)
