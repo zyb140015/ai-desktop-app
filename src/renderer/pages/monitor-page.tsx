@@ -1,58 +1,106 @@
-import * as Icons from '../components/icons';
-import { Pagination } from '../components/pagination';
+import { useState } from 'react'
+
+import * as Icons from '../components/icons'
+import { Pagination } from '../components/pagination'
+import { useDesktopMonitorQuery } from '../hooks/use-desktop-monitor-query'
+import { updateDesktopMonitorStatus } from '../services/monitor-api'
+
+const allLevel = '__all__'
 
 export function MonitorPage() {
-  const tableData = [
-    { id: 1, metric: 'CPU使用率', value: '19%', alarm: true, level: '一级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 2, metric: 'CPU使用率', value: '19%', alarm: false, level: '一级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 3, metric: 'CPU使用率', value: '19%', alarm: false, level: '二级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 4, metric: 'CPU使用率', value: '19%', alarm: false, level: '二级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 5, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '二级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 6, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '二级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 7, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '三级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 8, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '三级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 9, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '三级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-    { id: 10, metric: 'GPU内存使用率', value: '19%', alarm: true, level: '三级告警', time: '2023-05-26 12:12:00', desc: '这是一段告警说明文字' },
-  ];
+  const [metricInput, setMetricInput] = useState('')
+  const [metric, setMetric] = useState('')
+  const [level, setLevel] = useState(allLevel)
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+
+  const query = useDesktopMonitorQuery({
+    metric,
+    level: level === allLevel ? '' : level,
+    page,
+    pageSize,
+  })
+
+  const tableData = query.data?.items ?? []
+  const [activeMonitorId, setActiveMonitorId] = useState<number | null>(null)
+  const pagedData = tableData
+
+  const handleMonitorAction = async (id: number, status: 'ignored' | 'processing') => {
+    setActiveMonitorId(id)
+    try {
+      await updateDesktopMonitorStatus(id, status)
+      await query.refetch()
+    } finally {
+      setActiveMonitorId(null)
+    }
+  }
 
   return (
     <div className="w-full h-full max-w-[1600px] mx-auto flex flex-col min-h-0 bg-white dark:bg-slate-950 shadow-sm border border-slate-100 dark:border-slate-800 rounded-lg rounded-tl-none">
-      
-      {/* Search Header */}
       <div className="flex flex-col p-5 pb-5 shrink-0 border-b border-slate-100 dark:border-slate-800">
-         <div className="flex items-center justify-between">
-           <div className="flex items-center space-x-6">
-              <div className="flex items-center">
-                 <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">监控指标:</span>
-                 <input type="text" placeholder="请输入" className="border border-slate-200 dark:border-slate-800 rounded px-3 py-1.5 w-48 hover:border-emerald-400 dark:hover:border-emerald-600 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500/80 text-[13px] placeholder-slate-300 dark:placeholder-slate-600 transition-colors" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center">
+              <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">监控指标:</span>
+              <input
+                type="text"
+                value={metricInput}
+                onChange={(event) => setMetricInput(event.target.value)}
+                placeholder="请输入"
+                className="w-48 rounded border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-700 transition-colors hover:border-emerald-400 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-emerald-600 dark:focus:border-emerald-500"
+              />
+            </div>
+            <div className="flex items-center">
+              <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">告警级别:</span>
+              <div className="relative flex w-48 items-center justify-between rounded border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-700 transition-colors hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-emerald-600">
+                <select
+                  value={level}
+                  onChange={(event) => setLevel(event.target.value)}
+                  className="absolute inset-0 cursor-pointer appearance-none bg-transparent px-3 py-1.5 text-[13px] text-transparent outline-none"
+                >
+                  <option value={allLevel}>全部级别</option>
+                  <option value="一级告警">一级告警</option>
+                  <option value="二级告警">二级告警</option>
+                  <option value="三级告警">三级告警</option>
+                </select>
+                <span className="truncate pr-4">{level === allLevel ? '全部级别' : level}</span>
+                <Icons.ChevronDown className="w-4 h-4 text-slate-300 dark:text-slate-400" />
               </div>
-              <div className="flex items-center">
-                 <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">告警级别:</span>
-                 <div className="relative border border-slate-200 dark:border-slate-800 rounded px-3 py-1.5 w-48 hover:border-emerald-400 dark:hover:border-emerald-600 cursor-pointer flex items-center justify-between text-[13px] text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-950 transition-colors">
-                    请选择
-                    <Icons.ChevronDown className="w-4 h-4 text-slate-300 dark:text-slate-600" />
-                 </div>
+            </div>
+            <div className="flex items-center">
+              <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">最近采集:</span>
+              <div className="relative flex w-48 items-center justify-between rounded border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                {query.data?.summary.lastCollectedAt || '暂无数据'}
+                <Icons.Clock className="w-[15px] h-[15px] text-slate-400 dark:text-slate-500" />
               </div>
-              <div className="flex items-center">
-                 <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">告警日期:</span>
-                 <div className="relative border border-slate-200 dark:border-slate-800 rounded px-3 py-1.5 w-48 hover:border-emerald-400 dark:hover:border-emerald-600 cursor-pointer flex items-center justify-between text-[13px] text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-950 transition-colors">
-                    请选择
-                    <Icons.Clock className="w-[15px] h-[15px] text-slate-400 dark:text-slate-500" />
-                 </div>
-              </div>
-           </div>
-           
-           <div className="flex items-center space-x-3 shrink-0 ml-4">
-              <button className="px-5 py-1.5 border border-slate-200 dark:border-slate-800 rounded text-[13px] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900 transition-colors">重置</button>
-              <button className="px-5 py-1.5 bg-[#10B981] rounded text-[13px] text-white hover:bg-emerald-600 transition-colors font-medium">查询</button>
-           </div>
-         </div>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 shrink-0 ml-4">
+            <button
+              className="rounded border border-slate-200 px-5 py-1.5 text-[13px] text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              onClick={() => {
+                setMetricInput('')
+                setMetric('')
+                setLevel(allLevel)
+                setPage(1)
+              }}
+            >
+              重置
+            </button>
+            <button
+              className="px-5 py-1.5 bg-[#10B981] rounded text-[13px] text-white hover:bg-emerald-600 transition-colors font-medium"
+              onClick={() => setMetric(metricInput.trim())}
+            >
+              查询
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Table Data */}
       <div className="flex-1 overflow-auto custom-scrollbar relative">
         <table className="w-full text-left text-[13px] text-slate-600 dark:text-slate-400 min-w-[1000px]">
-          <thead className="bg-[#F8FAFC] text-slate-700 dark:text-slate-300 sticky top-0 z-10 shadow-sm border-b border-slate-100 dark:border-slate-800">
+          <thead className="sticky top-0 z-10 border-b border-slate-100 bg-[#F8FAFC] text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             <tr>
               <th className="py-3 px-6 font-bold w-16">序号</th>
               <th className="py-3 px-4 font-bold">监控指标</th>
@@ -65,36 +113,52 @@ export function MonitorPage() {
             </tr>
           </thead>
           <tbody>
-            {tableData.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 last:border-[#E2E8F0] dark:border-slate-700 transition-colors">
-                <td className="py-3.5 px-6 font-mono text-slate-500 dark:text-slate-400">{row.id}</td>
+            {pagedData.map((row, index) => (
+              <tr key={row.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50 last:border-[#E2E8F0] dark:border-slate-700 dark:hover:bg-slate-900">
+                <td className="py-3.5 px-6 font-mono text-slate-500 dark:text-slate-400">{(page - 1) * pageSize + index + 1}</td>
                 <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{row.metric}</td>
                 <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{row.value}</td>
                 <td className="py-3.5 px-4">
-                   <span className={`inline-flex px-1.5 py-0.5 rounded text-[12px] font-medium border ${
-                      row.alarm 
-                        ? 'bg-emerald-50 text-[#10B981] border-emerald-100' 
-                        : 'bg-red-50 text-red-500 border-red-100'
-                   }`}>
-                      {row.alarm ? '是' : '否'}
-                   </span>
+                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[12px] font-medium border ${
+                    row.alarm
+                      ? 'bg-emerald-50 text-[#10B981] border-emerald-100'
+                      : 'bg-red-50 text-red-500 border-red-100'
+                  }`}>
+                    {row.alarm ? '是' : '否'}
+                  </span>
                 </td>
                 <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{row.level}</td>
-                <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-slate-400">{row.time}</td>
-                <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.desc}>{row.desc}</td>
+                <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-slate-400">{row.occurredAt}</td>
+                <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.description}>{row.description}</td>
                 <td className="py-3.5 px-4 text-center space-x-2">
-                  <button className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors">忽略</button>
-                  <button className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors">处理</button>
+                  <button
+                    className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={activeMonitorId === row.id}
+                    onClick={() => handleMonitorAction(row.id, 'ignored')}
+                  >
+                    {activeMonitorId === row.id ? '处理中...' : '忽略'}
+                  </button>
+                  <button
+                    className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={activeMonitorId === row.id}
+                    onClick={() => handleMonitorAction(row.id, 'processing')}
+                  >
+                    {activeMonitorId === row.id ? '处理中...' : '处理'}
+                  </button>
                 </td>
               </tr>
             ))}
+            {!query.isLoading && tableData.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-10 px-4 text-center text-slate-500 dark:text-slate-400">暂无监控数据</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
+        {query.isLoading ? <div className="px-6 py-6 text-[13px] text-slate-500 dark:text-slate-400">加载中...</div> : null}
       </div>
 
-      {/* Extracted Shared Pagination Component */}
-      <Pagination total={150} />
-
+      <Pagination total={query.data?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} />
     </div>
-  );
+  )
 }

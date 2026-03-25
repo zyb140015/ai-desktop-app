@@ -23,9 +23,22 @@ function createMainWindow(): BrowserWindow {
 
   if (process.env.VITE_DEV_SERVER_URL) {
     void browserWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+    browserWindow.webContents.openDevTools()
   } else {
     void browserWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // 允许通过 F12 或 Cmd+Option+I (Mac) / Ctrl+Shift+I (Win) 随时打开关闭控制台
+  browserWindow.webContents.on('before-input-event', (event, input) => {
+    if (
+      input.key === 'F12' ||
+      (input.control && input.shift && input.key.toLowerCase() === 'i') ||
+      (input.meta && input.alt && input.key.toLowerCase() === 'i')
+    ) {
+      browserWindow.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
 
   return browserWindow
 }

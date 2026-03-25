@@ -1,7 +1,44 @@
-import * as React from 'react';
 import * as Icons from '../components/icons';
+import { useEffect, useState } from 'react';
+import { useDesktopSettingsQuery, useSaveDesktopSettingsMutation } from '../hooks/use-desktop-settings-query';
 
 export function SysconfigPage() {
+  const query = useDesktopSettingsQuery()
+  const saveMutation = useSaveDesktopSettingsMutation()
+  const [websiteTitle, setWebsiteTitle] = useState('')
+  const [systemLogo, setSystemLogo] = useState('')
+  const [theme, setTheme] = useState('emerald')
+  const [icp, setIcp] = useState('')
+  const [copyright, setCopyright] = useState('')
+  const [requireStrongPassword, setRequireStrongPassword] = useState(true)
+  const [loginFailLimit, setLoginFailLimit] = useState('5')
+  const [loginLockMinutes, setLoginLockMinutes] = useState('30')
+
+  useEffect(() => {
+    if (!query.data) return
+    setWebsiteTitle(query.data.websiteTitle)
+    setSystemLogo(query.data.systemLogo)
+    setTheme(query.data.theme)
+    setIcp(query.data.icp)
+    setCopyright(query.data.copyright)
+    setRequireStrongPassword(query.data.requireStrongPassword)
+    setLoginFailLimit(String(query.data.loginFailLimit))
+    setLoginLockMinutes(String(query.data.loginLockMinutes))
+  }, [query.data])
+
+  const handleSave = async () => {
+    await saveMutation.mutateAsync({
+      websiteTitle,
+      systemLogo,
+      theme,
+      icp,
+      copyright,
+      requireStrongPassword,
+      loginFailLimit: Number(loginFailLimit || 0),
+      loginLockMinutes: Number(loginLockMinutes || 0),
+    })
+  }
+
   return (
     <div className="w-full h-full max-w-[1600px] mx-auto flex flex-col min-h-0 bg-white dark:bg-slate-950 shadow-sm border border-slate-100 dark:border-slate-800 rounded-lg">
       <div className="flex border-b border-slate-100 dark:border-slate-800 items-center justify-between px-6 py-4">
@@ -17,11 +54,12 @@ export function SysconfigPage() {
               {/* 网站标题 */}
               <div className="flex items-center">
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-24 shrink-0 font-medium">网站标题 :</label>
-                <input 
-                  type="text" 
-                  defaultValue="多租户后台管理系统"
-                  className="w-[400px] border border-slate-200 dark:border-slate-800 rounded px-3 py-2 text-[13px] text-slate-700 dark:text-slate-300 hover:border-emerald-400 dark:hover:border-emerald-600 focus:outline-none focus:border-[#10B981] transition-colors"
-                />
+                  <input 
+                   type="text" 
+                   value={websiteTitle}
+                   onChange={(event) => setWebsiteTitle(event.target.value)}
+                   className="w-[400px] rounded border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:border-emerald-400 focus:border-[#10B981] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-emerald-600"
+                 />
               </div>
 
               {/* 网站 Logo */}
@@ -32,9 +70,10 @@ export function SysconfigPage() {
                     <Icons.Layers className="w-8 h-8 text-[#10B981]" />
                   </div>
                   <div className="flex flex-col space-y-2">
-                    <button className="px-4 py-1.5 border border-slate-200 dark:border-slate-800 rounded text-[13px] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900 transition-colors w-fit">
+                    <button className="w-fit rounded border border-slate-200 px-4 py-1.5 text-[13px] text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
                       上传 Logo
                     </button>
+                    {systemLogo ? <span className="text-[12px] text-slate-400 dark:text-slate-500 break-all">{systemLogo}</span> : null}
                     <span className="text-[12px] text-slate-400 dark:text-slate-500">建议尺寸: 120 x 120px，支持 jpg、png 格式</span>
                   </div>
                 </div>
@@ -44,18 +83,18 @@ export function SysconfigPage() {
               <div className="flex items-center">
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-24 shrink-0 font-medium">系统主题 :</label>
                 <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2 cursor-pointer">
+                  <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setTheme('emerald')}>
                     <div className="w-4 h-4 rounded-full border border-emerald-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-[#10B981]"></div>
                     </div>
                     <span className="text-[13px] text-slate-700 dark:text-slate-300">翠绿 (默认)</span>
                   </div>
-                  <div className="flex items-center space-x-2 cursor-pointer">
+                  <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setTheme('blue')}>
                     <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-700 flex items-center justify-center">
                     </div>
                     <span className="text-[13px] text-slate-500 dark:text-slate-400">科技蓝</span>
                   </div>
-                  <div className="flex items-center space-x-2 cursor-pointer">
+                  <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setTheme('red')}>
                     <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-700 flex items-center justify-center">
                     </div>
                     <span className="text-[13px] text-slate-500 dark:text-slate-400">薄暮红</span>
@@ -68,8 +107,9 @@ export function SysconfigPage() {
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-24 shrink-0 font-medium">备案信息 :</label>
                 <input 
                   type="text" 
-                  defaultValue="京ICP备10000000号-1"
-                  className="w-[400px] border border-slate-200 dark:border-slate-800 rounded px-3 py-2 text-[13px] text-slate-700 dark:text-slate-300 hover:border-emerald-400 dark:hover:border-emerald-600 focus:outline-none focus:border-[#10B981] transition-colors"
+                   value={icp}
+                   onChange={(event) => setIcp(event.target.value)}
+                  className="w-[400px] rounded border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:border-emerald-400 focus:border-[#10B981] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-emerald-600"
                 />
               </div>
 
@@ -78,8 +118,9 @@ export function SysconfigPage() {
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-24 shrink-0 font-medium">版权信息 :</label>
                 <input 
                   type="text" 
-                  defaultValue="Copyright © 2023 MTBM SYSTEM. All Rights Reserved."
-                  className="w-[400px] border border-slate-200 dark:border-slate-800 rounded px-3 py-2 text-[13px] text-slate-700 dark:text-slate-300 hover:border-emerald-400 dark:hover:border-emerald-600 focus:outline-none focus:border-[#10B981] transition-colors"
+                   value={copyright}
+                   onChange={(event) => setCopyright(event.target.value)}
+                  className="w-[400px] rounded border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:border-emerald-400 focus:border-[#10B981] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-emerald-600"
                 />
               </div>
             </div>
@@ -96,7 +137,7 @@ export function SysconfigPage() {
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-28 shrink-0 font-medium">密码复杂度 :</label>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" className="ai-checkbox" defaultChecked />
+                    <input type="checkbox" className="ai-checkbox" checked={requireStrongPassword} onChange={(event) => setRequireStrongPassword(event.target.checked)} />
                     <span className="text-[13px] text-slate-600 dark:text-slate-400">必须包含大小写字母、数字和特殊字符</span>
                   </div>
                 </div>
@@ -107,9 +148,9 @@ export function SysconfigPage() {
                 <label className="text-[13px] text-slate-700 dark:text-slate-300 w-28 shrink-0 font-medium">账号安全 :</label>
                 <div className="flex items-center space-x-2 text-[13px] text-slate-600 dark:text-slate-400">
                   <span>连续密码错误</span>
-                  <input type="text" className="w-12 border border-slate-200 dark:border-slate-800 rounded px-2 text-center text-[13px] focus:border-[#10B981] focus:outline-none" defaultValue="5" />
+                  <input type="text" className="w-12 rounded border border-slate-200 bg-white px-2 text-center text-[13px] text-slate-700 focus:border-[#10B981] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" value={loginFailLimit} onChange={(event) => setLoginFailLimit(event.target.value)} />
                   <span>次后锁定账号</span>
-                  <input type="text" className="w-16 border border-slate-200 dark:border-slate-800 rounded px-2 text-center text-[13px] focus:border-[#10B981] focus:outline-none ml-2" defaultValue="30" />
+                  <input type="text" className="ml-2 w-16 rounded border border-slate-200 bg-white px-2 text-center text-[13px] text-slate-700 focus:border-[#10B981] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" value={loginLockMinutes} onChange={(event) => setLoginLockMinutes(event.target.value)} />
                   <span>分钟</span>
                 </div>
               </div>
@@ -118,8 +159,8 @@ export function SysconfigPage() {
         </div>
 
         <div className="ml-3 pt-6 mt-6">
-          <button className="px-6 py-2 bg-[#10B981] text-white rounded text-[13px] hover:bg-emerald-600 transition-colors font-medium">
-             保存设置
+          <button className="px-6 py-2 bg-[#10B981] text-white rounded text-[13px] hover:bg-emerald-600 transition-colors font-medium disabled:cursor-not-allowed disabled:opacity-60" onClick={handleSave} disabled={saveMutation.isPending || query.isLoading}>
+             {saveMutation.isPending ? '保存中...' : '保存设置'}
           </button>
         </div>
 

@@ -1,6 +1,7 @@
 import { createHashRouter } from 'react-router-dom'
 
 import { Shell } from './shell'
+import { RequireAuth } from './require-auth'
 import { NotFoundPage } from '../pages/not-found-page'
 import { OverviewPage } from '../pages/overview-page'
 import { PlaybookPage } from '../pages/playbook-page'
@@ -21,91 +22,101 @@ import { AnnouncementsPage } from '../pages/announcements-page'
 import { SettingsPage } from '../pages/settings-page'
 import { SysconfigPage } from '../pages/sysconfig-page'
 import { MessagesPage } from '../pages/messages-page'
+import { LoginPage } from '../pages/login-page'
 
 export const appRouter = createHashRouter([
   {
-    path: '/',
-    element: <Shell />,
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    element: <RequireAuth />,
     children: [
       {
-        index: true,
-        element: <OverviewPage />,
-      },
-      {
-        path: 'projects',
-        element: <PlaybookPage />,
-      },
-      {
-        path: 'settings',
-        element: <SettingsPage />,
-      },
-      {
-        path: 'bi/system',
-        element: <SystemStatsPage />,
-      },
-      {
-        path: 'bi/usage',
-        element: <UsageStatsPage />,
-      },
-      {
-        path: 'orgs',
-        element: <OrgsPage />,
-      },
-      {
-        path: 'roles',
-        element: <RolesPage />,
-      },
-      {
-        path: 'tenant/menu-template',
-        element: <MenuTemplatePage />,
-      },
-      {
-        path: 'tenant/management',
-        element: <TenantPage />,
-      },
-      {
-        path: 'profile',
-        element: <ProfilePage />,
-      },
-      {
-        path: 'users',
-        element: <UsersPage />,
-      },
-      {
-        path: 'menus',
-        element: <MenusPage />,
-      },
-      {
-        path: 'dict',
-        element: <DictPage />,
-      },
-      {
-        path: 'announcements',
-        element: <AnnouncementsPage />,
-      },
-      {
-        path: 'logs/login',
-        element: <LoginLogsPage />,
-      },
-      {
-        path: 'logs/operation',
-        element: <OperationLogsPage />,
-      },
-      {
-        path: 'monitor',
-        element: <MonitorPage />,
-      },
-      {
-        path: 'messages',
-        element: <MessagesPage />,
-      },
-      {
-        path: 'sysconfig',
-        element: <SysconfigPage />,
-      },
-      {
-        path: '*',
-        element: <NotFoundPage />,
+        path: '/',
+        element: <Shell />,
+        children: [
+          {
+            index: true,
+            element: <OverviewPage />,
+          },
+          {
+            path: 'projects',
+            element: <PlaybookPage />,
+          },
+          {
+            path: 'settings',
+            element: <SettingsPage />,
+          },
+          {
+            path: 'bi/system',
+            element: <SystemStatsPage />,
+          },
+          {
+            path: 'bi/usage',
+            element: <UsageStatsPage />,
+          },
+          {
+            path: 'orgs',
+            element: <OrgsPage />,
+          },
+          {
+            path: 'roles',
+            element: <RolesPage />,
+          },
+          {
+            path: 'tenant/menu-template',
+            element: <MenuTemplatePage />,
+          },
+          {
+            path: 'tenant/management',
+            element: <TenantPage />,
+          },
+          {
+            path: 'profile',
+            element: <ProfilePage />,
+          },
+          {
+            path: 'users',
+            element: <UsersPage />,
+          },
+          {
+            path: 'menus',
+            element: <MenusPage />,
+          },
+          {
+            path: 'dict',
+            element: <DictPage />,
+          },
+          {
+            path: 'announcements',
+            element: <AnnouncementsPage />,
+          },
+          {
+            path: 'logs/login',
+            element: <LoginLogsPage />,
+          },
+          {
+            path: 'logs/operation',
+            element: <OperationLogsPage />,
+          },
+          {
+            path: 'monitor',
+            element: <MonitorPage />,
+          },
+          {
+            path: 'messages',
+            element: <MessagesPage />,
+          },
+          {
+            path: 'sysconfig',
+            element: <SysconfigPage />,
+          },
+          {
+            path: '*',
+            element: <NotFoundPage />,
+          },
+        ],
       },
     ],
   },

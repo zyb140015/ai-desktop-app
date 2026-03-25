@@ -18,24 +18,32 @@ import {
 } from "@/components/ui/table"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
-// @ts-ignore
 import { Calendar as CalendarIcon } from "lucide-react";
+import { useDesktopOperationLogsQuery } from '../hooks/use-desktop-log-query'
+import { exportCsvFile, showActionError, showActionSuccess } from '../lib/action-feedback'
 
 export function OperationLogsPage() {
-  const [date, setDate] = React.useState<Date>()
+  const [startDate, setStartDate] = React.useState<Date>()
+  const [endDate, setEndDate] = React.useState<Date>()
+  const [nameInput, setNameInput] = React.useState('')
+  const [name, setName] = React.useState('')
+  const [status, setStatus] = React.useState('')
+  const [selectedStartDate, setSelectedStartDate] = React.useState('')
+  const [selectedEndDate, setSelectedEndDate] = React.useState('')
+  const [page, setPage] = React.useState(1)
+  const pageSize = 10
+  const query = useDesktopOperationLogsQuery({ name, status, startDate: selectedStartDate, endDate: selectedEndDate, page, pageSize })
+  const logsData = query.data?.items ?? []
+  const total = query.data?.total ?? 0
 
-  const logsData = [
-    { id: 1, logId: '2345641204845120', module: '租户管理', category: '修改', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 2, logId: '2345641204845120', module: '租户管理', category: '修改', userId: '100001', name: '张三', status: '失败', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '密码错误，登录失败' },
-    { id: 3, logId: '2345641204845120', module: '菜单管理', category: '修改', userId: '100001', name: '张三', status: '失败', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '密码错误，登录失败' },
-    { id: 4, logId: '2345641204845120', module: '菜单管理', category: '修改', userId: '100001', name: '张三', status: '失败', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '密码错误，登录失败' },
-    { id: 5, logId: '2345641204845120', module: '菜单管理', category: '修改', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 6, logId: '2345641204845120', module: '菜单管理', category: '删除', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 7, logId: '2345641204845120', module: '菜单管理', category: '删除', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 8, logId: '2345641204845120', module: '菜单管理', category: '删除', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 9, logId: '2345641204845120', module: '菜单管理', category: '删除', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-    { id: 10, logId: '2345641204845120', module: '菜单管理', category: '删除', userId: '100001', name: '张三', status: '成功', time: '2023-05-26 12:12:00', ip: '10.111.123.131', browser: 'Chrome 11', desc: '登陆成功' },
-  ];
+  const handleExport = () => {
+	if (logsData.length === 0) {
+		showActionError('当前没有可导出的操作日志')
+		return
+	}
+	exportCsvFile('operation-logs.csv', ['日志ID', '操作模块', '操作分类', '用户ID', '姓名', '状态', '操作时间', '登录IP', '浏览器', '日志说明'], logsData.map((row) => [row.logId, row.module, row.category, row.userId, row.name, row.status, row.time, row.ip, row.browser, row.desc]))
+	showActionSuccess('操作日志导出成功')
+  }
 
   return (
     <div className="w-full h-full max-w-[1600px] mx-auto flex flex-col min-h-0 bg-white dark:bg-slate-950 shadow-sm border border-slate-100 dark:border-slate-800 rounded-lg rounded-tl-none">
@@ -46,36 +54,63 @@ export function OperationLogsPage() {
            <div className="flex items-center space-x-6">
               <div className="flex items-center">
                  <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">用户姓名:</Label>
-                 <Input type="text" placeholder="请输入" className="h-8 w-48 text-[13px]" />
+                 <Input type="text" placeholder="请输入" className="h-8 w-48 text-[13px]" value={nameInput} onChange={(event) => setNameInput(event.target.value)} />
               </div>
               <div className="flex items-center">
-                 <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">操作日期:</Label>
-                 <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "h-8 w-48 justify-start text-left font-normal text-[13px] border-slate-200 dark:border-slate-800",
-                          !date && "text-slate-400 dark:text-slate-500"
+                 <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">开始日期:</Label>
+                  <Popover>
+                     <PopoverTrigger
+                       className={cn(
+                         "inline-flex h-8 w-48 items-center justify-start rounded-lg border border-slate-200 bg-background px-2.5 text-left text-[13px] font-normal outline-none transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+                          !startDate && "text-slate-400 dark:text-slate-500"
                         )}
                       >
-                        {date ? format(date, "PPP") : <span>请选择</span>}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
+                        {startDate ? format(startDate, "PPP") : <span>请选择</span>}
+                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                     </PopoverTrigger>
+                     <PopoverContent className="w-auto p-0" align="start">
+                       <Calendar
                         mode="single"
-                        selected={date}
-                        onSelect={setDate}
-                        initialFocus
+                         selected={startDate}
+                          onSelect={(value) => {
+                            setStartDate(value)
+                            setSelectedStartDate(value ? format(value, 'yyyy-MM-dd') : '')
+                            setPage(1)
+                          }}
+                         initialFocus
                       />
                     </PopoverContent>
-                 </Popover>
-              </div>
+                  </Popover>
+               </div>
+               <div className="flex items-center">
+                  <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">结束日期:</Label>
+                   <Popover>
+                      <PopoverTrigger
+                        className={cn(
+                          "inline-flex h-8 w-48 items-center justify-start rounded-lg border border-slate-200 bg-background px-2.5 text-left text-[13px] font-normal outline-none transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+                          !endDate && "text-slate-400 dark:text-slate-500"
+                        )}
+                      >
+                        {endDate ? format(endDate, "PPP") : <span>请选择</span>}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                         mode="single"
+                         selected={endDate}
+                          onSelect={(value) => {
+                            setEndDate(value)
+                            setSelectedEndDate(value ? format(value, 'yyyy-MM-dd') : '')
+                            setPage(1)
+                          }}
+                         initialFocus
+                       />
+                     </PopoverContent>
+                   </Popover>
+               </div>
               <div className="flex items-center">
                  <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-3 shrink-0 font-medium whitespace-nowrap">日志状态:</Label>
-                 <RadioGroup defaultValue="all" className="flex items-center space-x-3">
+                  <RadioGroup value={status || 'all'} onValueChange={(value: string) => setStatus(value === 'all' ? '' : value)} className="flex items-center space-x-3">
                     <div className="flex items-center space-x-1.5 cursor-pointer">
                       <RadioGroupItem value="all" id="r1" className="text-emerald-500 border-emerald-500 fill-emerald-500" />
                       <Label htmlFor="r1" className="text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer font-normal">全部</Label>
@@ -93,8 +128,9 @@ export function OperationLogsPage() {
            </div>
            
            <div className="flex items-center space-x-3 shrink-0 ml-4">
-              <Button variant="outline" className="h-8 px-5 text-[13px] text-slate-600 dark:text-slate-400">重置</Button>
-              <Button className="h-8 px-5 bg-[#10B981] text-[13px] text-white hover:bg-emerald-600">查询</Button>
+                <Button variant="outline" className="h-8 px-5 text-[13px] text-slate-600 dark:text-slate-400" onClick={() => { setNameInput(''); setName(''); setStatus(''); setStartDate(undefined); setEndDate(undefined); setSelectedStartDate(''); setSelectedEndDate(''); setPage(1) }}>重置</Button>
+               <Button className="h-8 px-5 bg-[#10B981] text-[13px] text-white hover:bg-emerald-600" onClick={() => { setName(nameInput.trim()); setPage(1) }}>查询</Button>
+               <Button className="h-8 px-5 bg-[#10B981] text-[13px] text-white hover:bg-emerald-600" onClick={handleExport}>导出</Button>
            </div>
          </div>
       </div>
@@ -102,7 +138,7 @@ export function OperationLogsPage() {
       {/* Table Data - Built with shadcn ui */}
       <div className="flex-1 overflow-auto custom-scrollbar relative">
         <Table className="w-full text-left text-[13px] text-slate-600 dark:text-slate-400 min-w-[1200px]">
-          <TableHeader className="bg-[#F8FAFC] text-slate-700 dark:text-slate-300 sticky top-0 z-10 shadow-sm border-b border-slate-100 dark:border-slate-800/80">
+          <TableHeader className="sticky top-0 z-10 border-b border-slate-100 bg-[#F8FAFC] text-slate-700 shadow-sm dark:border-slate-800/80 dark:bg-slate-900 dark:text-slate-300">
             <TableRow className="hover:bg-transparent">
               <TableHead className="font-bold w-12 pl-5 h-11">序号</TableHead>
               <TableHead className="font-bold h-11">日志ID</TableHead>
@@ -119,7 +155,7 @@ export function OperationLogsPage() {
           </TableHeader>
           <TableBody>
             {logsData.map((row) => (
-              <TableRow key={row.id} className="hover:bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 transition-colors">
+              <TableRow key={row.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900">
                 <TableCell className="font-mono text-slate-500 dark:text-slate-400 pl-5 py-3.5">{row.id}</TableCell>
                 <TableCell className="font-mono text-slate-600 dark:text-slate-400 py-3.5">{row.logId}</TableCell>
                 <TableCell className="text-slate-600 dark:text-slate-400 py-3.5">{row.module}</TableCell>
@@ -150,7 +186,7 @@ export function OperationLogsPage() {
       </div>
 
       {/* Extracted Shared Pagination Component */}
-      <Pagination total={150} />
+       <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
 
     </div>
   );

@@ -1,11 +1,11 @@
-import * as React from 'react';
+import * as React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Fingerprint, Link2, LogOut, Monitor, Shield, User } from 'lucide-react'
 
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
-import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Table,
   TableBody,
@@ -13,361 +13,484 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-// @ts-ignore
-import { User, KeyRound, Shield, Link2, Fingerprint, Monitor, LogOut } from "lucide-react";
+} from '@/components/ui/table'
+import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { useCurrentMenusQuery } from '../hooks/use-current-menus-query'
+import { changePassword, updateProfile, uploadAvatar } from '../services/auth-api'
+import { ApiError } from '../services/http-client'
+import { useAuthStore } from '../store/auth-store'
+
+type ProfileTabKey = 'basic' | 'account' | 'permission' | 'bindAuth' | 'realName' | 'device' | 'logout'
+
+const profileTabs: Array<{ key: ProfileTabKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { key: 'basic', label: '基本信息', icon: User },
+  { key: 'account', label: '账号信息', icon: User },
+  { key: 'permission', label: '权限信息', icon: Shield },
+  { key: 'bindAuth', label: '绑定授权', icon: Link2 },
+  { key: 'realName', label: '实名认证', icon: Fingerprint },
+  { key: 'device', label: '我的设备', icon: Monitor },
+  { key: 'logout', label: '退出登录', icon: LogOut },
+]
 
 export function ProfilePage() {
-  const [activeTab, setActiveTab] = React.useState('basic');
+  const navigate = useNavigate()
+  const currentUser = useAuthStore((state) => state.currentUser)
+  const clearSession = useAuthStore((state) => state.clearSession)
+  const setCurrentUser = useAuthStore((state) => state.setCurrentUser)
+  const { data: menuResponse } = useCurrentMenusQuery()
+  const [activeTab, setActiveTab] = React.useState<ProfileTabKey>('basic')
+  const [profileUsername, setProfileUsername] = React.useState(currentUser?.username ?? '')
+  const [profileSex, setProfileSex] = React.useState(currentUser?.sex ?? '0')
+  const [profileMessage, setProfileMessage] = React.useState<string | null>(null)
+  const [profileError, setProfileError] = React.useState<string | null>(null)
+  const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false)
+  const [oldPassword, setOldPassword] = React.useState('')
+  const [newPassword, setNewPassword] = React.useState('')
+  const [confirmPassword, setConfirmPassword] = React.useState('')
+  const [passwordMessage, setPasswordMessage] = React.useState<string | null>(null)
+  const [passwordError, setPasswordError] = React.useState<string | null>(null)
+  const [isUpdatingPassword, setIsUpdatingPassword] = React.useState(false)
 
-  const menuItems = [
-    { key: 'basic', label: '基本信息', icon: User },
-    { key: 'account', label: '账号信息', icon: User },
-    { key: 'permission', label: '权限信息', icon: Shield },
-    { key: 'bindAuth', label: '绑定授权', icon: Link2 },
-    { key: 'realName', label: '实名认证', icon: Fingerprint },
-    { key: 'device', label: '我的设备', icon: Monitor },
-    { key: 'logout', label: '注销账号', icon: LogOut },
-  ];
+  const displayName = currentUser?.username?.trim() || '未登录'
+  const avatarSrc = resolveAvatarSrc(currentUser?.avatar)
+  const accessibleMenus = (menuResponse?.list ?? []).filter((menu) => menu.level >= 1)
+
+  React.useEffect(() => {
+    setProfileUsername(currentUser?.username ?? '')
+    setProfileSex(currentUser?.sex ?? '0')
+  }, [currentUser?.sex, currentUser?.username])
+
+  const handleLogout = () => {
+    clearSession()
+    navigate('/login', { replace: true })
+  }
+
+  const handlePasswordSubmit = async () => {
+    setPasswordMessage(null)
+    setPasswordError(null)
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError('请完整填写密码信息')
+      return
+    }
+
+    if (newPassword.length < 6 || newPassword.length > 18) {
+      setPasswordError('新密码长度需为6-18位')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('两次输入的新密码不一致')
+      return
+    }
+
+    setIsUpdatingPassword(true)
+    try {
+      const result = await changePassword({ oldPassword, newPassword })
+      setPasswordMessage(result.message)
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setPasswordError(error.message)
+      } else {
+        setPasswordError('密码修改失败，请稍后重试')
+      }
+    } finally {
+      setIsUpdatingPassword(false)
+    }
+  }
+
+  const handleProfileSubmit = async () => {
+    setProfileMessage(null)
+    setProfileError(null)
+    if (!profileUsername.trim()) {
+      setProfileError('用户名不能为空')
+      return
+    }
+    setIsUpdatingProfile(true)
+    try {
+      const user = await updateProfile({
+        username: profileUsername.trim(),
+        avatar: currentUser?.avatar || '',
+        sex: profileSex,
+      })
+      setCurrentUser({ ...currentUser, ...user } as typeof currentUser)
+      setProfileMessage('资料保存成功')
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setProfileError(error.message)
+      } else {
+        setProfileError('资料保存失败，请稍后重试')
+      }
+    } finally {
+      setIsUpdatingProfile(false)
+    }
+  }
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !currentUser) {
+      return
+    }
+
+    setProfileMessage(null)
+    setProfileError(null)
+    setIsUploadingAvatar(true)
+    try {
+      const result = await uploadAvatar(file)
+      const user = await updateProfile({
+        username: profileUsername.trim() || currentUser.username,
+        avatar: result.avatar,
+        sex: profileSex,
+      })
+      setCurrentUser({ ...currentUser, ...user })
+      setProfileMessage('头像更新成功')
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : '头像上传失败，请稍后重试')
+    } finally {
+      setIsUploadingAvatar(false)
+      event.target.value = ''
+    }
+  }
 
   return (
-    <div className="w-full h-full max-w-[1600px] mx-auto flex min-h-0">
-      
-      {/* Left Panel - Profile Card + Navigation */}
-      <div className="w-[300px] shrink-0 flex flex-col items-center pt-8">
-        {/* Avatar */}
-        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg mb-2 bg-gradient-to-br from-cyan-100 to-emerald-100">
-          <img 
-            src="https://api.dicebear.com/7.x/notionists/svg?seed=Felix" 
-            alt="用户头像"
-            className="w-full h-full object-cover"
-          />
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px]">
+      <div className="flex w-[300px] shrink-0 flex-col items-center pt-8">
+        <div className="mb-2 h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-cyan-100 to-emerald-100 shadow-lg">
+          <img src={avatarSrc} alt={displayName} className="h-full w-full object-cover" />
         </div>
-        
-        {/* Menu Navigation */}
-        <nav className="w-full mt-6 flex flex-col space-y-1 px-4">
-          {menuItems.map((item) => {
-            const isActive = activeTab === item.key;
-            const IconComp = item.icon;
+        <div className="mt-2 text-center">
+          <div className="text-[15px] font-semibold text-slate-800 dark:text-slate-100">{displayName}</div>
+          <div className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{currentUser?.email || '未设置邮箱'}</div>
+        </div>
+
+        <nav className="mt-6 flex w-full flex-col space-y-1 px-4">
+          {profileTabs.map((item) => {
+            const isActive = activeTab === item.key
+            const IconComp = item.icon
             return (
               <button
                 key={item.key}
                 onClick={() => setActiveTab(item.key)}
                 className={cn(
-                  "flex items-center w-full px-6 py-2.5 rounded-lg text-[13px] transition-colors text-left",
-                  isActive 
-                    ? "bg-emerald-50 text-[#10B981] font-medium border border-emerald-100" 
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900 hover:text-slate-800 dark:text-slate-200"
+                  'flex w-full items-center rounded-lg px-6 py-2.5 text-left text-[13px] transition-colors',
+                  isActive
+                    ? 'border border-emerald-100 bg-emerald-50 font-medium text-[#10B981]'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200',
                 )}
               >
-                <IconComp className={cn("w-[16px] h-[16px] mr-3 shrink-0", isActive ? "text-[#10B981]" : "text-slate-400 dark:text-slate-500")} />
+                <IconComp className={cn('mr-3 h-[16px] w-[16px] shrink-0', isActive ? 'text-[#10B981]' : 'text-slate-400 dark:text-slate-500')} />
                 {item.label}
               </button>
-            );
+            )
           })}
         </nav>
       </div>
 
-      {/* Right Panel - Detail Card */}
-      <div className="flex-1 min-w-0 p-6 pt-10 pl-0">
-        <div className="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm h-full flex flex-col">
-          {/* Detail Header */}
-          <div className="flex items-center justify-between px-8 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+      <div className="min-w-0 flex-1 p-6 pl-0 pt-10">
+        <div className="flex h-full flex-col rounded-xl border border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex items-center justify-between border-b border-slate-100 px-8 pb-4 pt-5 dark:border-slate-800">
             <h2 className="text-[14px] font-bold text-slate-800 dark:text-slate-200">
-              {menuItems.find(m => m.key === activeTab)?.label}
+              {profileTabs.find((item) => item.key === activeTab)?.label}
             </h2>
-            <Button className="h-[28px] px-4 bg-[#10B981] text-[12px] text-white hover:bg-emerald-600 font-medium">编辑</Button>
+            {activeTab === 'logout' ? (
+              <Button className="h-[28px] bg-red-500 px-4 text-[12px] font-medium text-white hover:bg-red-600" onClick={handleLogout}>
+                立即退出
+              </Button>
+            ) : activeTab === 'basic' ? (
+              <Button className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600" disabled={isUpdatingProfile || isUploadingAvatar} onClick={handleProfileSubmit}>
+                {isUpdatingProfile ? '保存中...' : '保存'}
+              </Button>
+            ) : (
+              <Button disabled className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600">
+                编辑
+              </Button>
+            )}
           </div>
 
-          {/* Detail Content */}
-          <div className="flex-1 px-8 py-8 overflow-auto custom-scrollbar">
+          <div className="custom-scrollbar flex-1 overflow-auto px-8 py-8">
             {activeTab === 'basic' && (
               <div className="space-y-7">
                 <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">姓名</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 font-medium">李昭欣</span>
+                  <span className="w-16 shrink-0 pt-0.5 text-[13px] text-slate-500 dark:text-slate-400">头像</span>
+                  <div className="ml-8 flex items-center gap-4">
+                    <div className="h-16 w-16 overflow-hidden rounded-full border border-slate-200 dark:border-slate-700">
+                      <img src={avatarSrc} alt={displayName} className="h-full w-full object-cover" />
+                    </div>
+                    <label className="cursor-pointer text-[13px] text-[#10B981] hover:text-emerald-600">
+                      {isUploadingAvatar ? '上传中...' : '更换头像'}
+                      <input className="hidden" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} />
+                    </label>
+                  </div>
                 </div>
                 <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">用户ID</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 font-mono">25524934542848</span>
+                  <span className="w-16 shrink-0 pt-2 text-[13px] text-slate-500 dark:text-slate-400">姓名</span>
+                  <div className="ml-8 w-full max-w-sm">
+                    <Input value={profileUsername} onChange={(event) => setProfileUsername(event.target.value)} placeholder="请输入用户名" />
+                  </div>
                 </div>
-                <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">所属部门</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200">明镜集团/桃花源分公司/营销部</span>
-                </div>
+                <ProfileField label="用户ID" value={String(currentUser?.id ?? '-')} mono />
+                <ProfileField label="邮箱" value={currentUser?.email || '未设置'} mono />
                 <div className="flex items-center">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">状态</span>
+                  <span className="w-16 shrink-0 text-[13px] text-slate-500 dark:text-slate-400">状态</span>
                   <span className="ml-8">
-                    <Badge variant="outline" className="rounded font-medium px-2 py-0 border-[#E2E8F0] dark:border-slate-700 pointer-events-none bg-emerald-50 text-[#10B981]">
-                      启用
+                    <Badge variant="outline" className="pointer-events-none rounded border-[#E2E8F0] bg-emerald-50 px-2 py-0 font-medium text-[#10B981] dark:border-slate-700">
+                      已启用
                     </Badge>
                   </span>
                 </div>
                 <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">岗位</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200">信息化办公室主任</span>
-                </div>
-              </div>
-            )}
-            
-            {activeTab === 'account' && (
-              <div className="space-y-6">
-                <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">账号</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 font-mono">wangsixiao</span>
-                </div>
-                <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">手机号</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 font-mono">133 1234 1234</span>
-                </div>
-                <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">密码</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 align-middle leading-tight mt-[1px]">******</span>
-                </div>
-                <div className="flex items-start">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0 pt-0.5">邮箱</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200 font-mono">wangsixiao@163.com</span>
-                </div>
-                <div className="flex items-center">
-                  <span className="w-16 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">密保</span>
-                  <span className="ml-8">
-                    <Badge variant="outline" className="rounded-[4px] font-medium px-2 py-[1px] border-[#E2E8F0] dark:border-slate-700 pointer-events-none bg-amber-50 text-amber-500 text-[11px]">
-                      未设置
-                    </Badge>
-                  </span>
-                </div>
-              </div>
-            )}
-            
-            {activeTab === 'permission' && (
-              <div className="space-y-8 pb-4">
-                
-                {/* 1. Account Permissions */}
-                <div>
-                  <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-4 border-l-2 border-[#10B981] pl-2">账号权限</h3>
-                  <div className="flex items-center space-x-6">
-                    {['超管', '高管', '运维', '财务'].map((role, idx) => (
-                      <div key={role} className="flex items-center space-x-2">
-                        <input type="checkbox" id={`role-${idx}`} checked={idx === 0 || idx === 2} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                        <Label htmlFor={`role-${idx}`} className="text-[13px] text-slate-600 dark:text-slate-400 font-normal">{role}</Label>
-                      </div>
+                  <span className="w-16 shrink-0 pt-2 text-[13px] text-slate-500 dark:text-slate-400">性别</span>
+                  <div className="ml-8 flex gap-2">
+                    {[
+                      { value: '0', label: '未知' },
+                      { value: '1', label: '男' },
+                      { value: '2', label: '女' },
+                    ].map((option) => (
+                      <Button
+                        key={option.value}
+                        variant={profileSex === option.value ? 'default' : 'outline'}
+                        type="button"
+                        onClick={() => setProfileSex(option.value)}
+                      >
+                        {option.label}
+                      </Button>
                     ))}
                   </div>
                 </div>
+                <ProfileField label="创建时间" value={currentUser?.createdAt || '-'} mono />
+                {profileError ? <p className="text-[13px] text-red-500">{profileError}</p> : null}
+                {profileMessage ? <p className="text-[13px] text-emerald-600">{profileMessage}</p> : null}
+              </div>
+            )}
 
-                {/* 2. Data Scope */}
+            {activeTab === 'account' && (
+              <div className="space-y-8">
+                <div className="space-y-6">
+                <ProfileField label="账号" value={displayName} mono />
+                <ProfileField label="手机号" value={currentUser?.phone || '未设置'} mono />
+                <ProfileField label="密码" value="******" />
+                <ProfileField label="邮箱" value={currentUser?.email || '未设置'} mono />
+                <div className="flex items-center">
+                  <span className="w-16 shrink-0 text-[13px] text-slate-500 dark:text-slate-400">备注</span>
+                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200">{currentUser?.remark || '无'}</span>
+                </div>
+              </div>
+
                 <div>
-                  <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-4 border-l-2 border-[#10B981] pl-2">数据权限</h3>
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <input type="checkbox" id="r1" checked={true} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                      <Label htmlFor="r1" className="text-[13px] text-slate-600 dark:text-slate-400 font-normal">全部数据</Label>
+                  <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">修改密码</h3>
+                  <div className="max-w-xl space-y-4 rounded-lg border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900">
+                    <div className="space-y-2">
+                      <Label htmlFor="old-password">旧密码</Label>
+                      <Input id="old-password" type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="请输入当前密码" />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input type="checkbox" id="r2" checked={false} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                      <Label htmlFor="r2" className="text-[13px] text-slate-600 dark:text-slate-400 font-normal">本部门及下属部门数据</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">新密码</Label>
+                      <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="请输入6-18位新密码" />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input type="checkbox" id="r3" checked={false} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                      <Label htmlFor="r3" className="text-[13px] text-slate-600 dark:text-slate-400 font-normal">本部门数据</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">确认新密码</Label>
+                      <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="请再次输入新密码" />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input type="checkbox" id="r4" checked={false} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                      <Label htmlFor="r4" className="text-[13px] text-slate-600 dark:text-slate-400 font-normal">仅本人数据</Label>
+                    {passwordError ? <p className="text-[13px] text-red-500">{passwordError}</p> : null}
+                    {passwordMessage ? <p className="text-[13px] text-emerald-600">{passwordMessage}</p> : null}
+                    <div className="flex justify-end">
+                      <Button className="bg-[#10B981] text-white hover:bg-emerald-600" disabled={isUpdatingPassword} onClick={handlePasswordSubmit}>
+                        {isUpdatingPassword ? '提交中...' : '更新密码'}
+                      </Button>
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* 3. Functional Permissions Table */}
+            {activeTab === 'permission' && (
+              <div className="space-y-8 pb-4">
                 <div>
-                  <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-4 border-l-2 border-[#10B981] pl-2">功能权限</h3>
-                  <div className="border border-slate-100 dark:border-slate-800 rounded-md overflow-hidden">
+                  <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">当前可访问菜单</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {accessibleMenus.length > 0 ? (
+                      accessibleMenus.map((menu) => (
+                        <Badge key={`${menu.parentId}-${menu.id}`} variant="outline" className="border-[#E2E8F0] dark:border-slate-700">
+                          {menu.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-[13px] text-slate-500 dark:text-slate-400">暂无菜单权限数据</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">功能权限</h3>
+                  <div className="overflow-hidden rounded-md border border-slate-100 dark:border-slate-800">
                     <Table className="w-full text-[13px] text-slate-600 dark:text-slate-400">
-                      <TableHeader className="bg-[#F8FAFC]">
-                        <TableRow className="hover:bg-transparent border-slate-100 dark:border-slate-800">
-                          <TableHead className="w-48 font-bold h-10 border-r border-slate-100 dark:border-slate-800">模块</TableHead>
-                          <TableHead className="font-bold h-10 text-center">查询/查看</TableHead>
-                          <TableHead className="font-bold h-10 text-center">新增</TableHead>
-                          <TableHead className="font-bold h-10 text-center">修改</TableHead>
-                          <TableHead className="font-bold h-10 text-center">删除</TableHead>
-                          <TableHead className="font-bold h-10 text-center">导出</TableHead>
-                          <TableHead className="font-bold h-10 text-center">导入</TableHead>
+                      <TableHeader className="bg-[#F8FAFC] dark:bg-slate-900">
+                        <TableRow className="border-slate-100 hover:bg-transparent dark:border-slate-800">
+                          <TableHead className="h-10 w-48 border-r border-slate-100 font-bold dark:border-slate-800">菜单</TableHead>
+                          <TableHead className="h-10 text-center font-bold">可见</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {['租户管理', '告警统计', '租户统计', '员工统计'].map((module, i) => (
-                          <TableRow key={module} className="hover:bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800">
-                            <TableCell className="font-medium h-12 border-r border-slate-100 dark:border-slate-800">{module}</TableCell>
-                            {[1, 2, 3, 4, 5, 6].map((col) => {
-                              // Simulate some realistic permissions: mostly read/edit/add, less delete/export
-                              const isChecked = (col === 1) || (i < 2 && col <= 3) || (module === '员工统计' && col === 5);
-                              return (
-                                <TableCell key={col} className="h-12 text-center p-0 align-middle">
-                                  <input type="checkbox" checked={isChecked} className="ai-checkbox pointer-events-none opacity-80" readOnly />
-                                </TableCell>
-                              );
-                            })}
+                        {accessibleMenus.map((menu) => (
+                          <TableRow key={menu.id} className="border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900">
+                            <TableCell className="h-12 border-r border-slate-100 font-medium dark:border-slate-800">{menu.name}</TableCell>
+                            <TableCell className="h-12 p-0 text-center align-middle">
+                              <input type="checkbox" checked className="ai-checkbox pointer-events-none opacity-80" readOnly />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
                 </div>
-
               </div>
             )}
 
             {activeTab === 'bindAuth' && (
-              <div className="space-y-6 max-w-2xl">
-                <div className="flex items-center justify-between py-4 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
-                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0zm6 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm8-2h-3.32c-.17-1.16-.6-2.22-1.25-3.15l2.35-2.35L17.5 2.22l-2.35 2.35a8.038 8.038 0 0 0-3.15-1.25V0h-4v3.32a8.038 8.038 0 0 0-3.15 1.25L2.5 2.22 1.44 2.14 3.79 4.5A8.038 8.038 0 0 0 2.5 7.65L.15 5.3 0 7.3l2.25.75c-.17 1.16-.6 2.22-1.25 3.15l-2.35-2.35L1.44 14.5l2.35-2.35A8.038 8.038 0 0 0 6.94 13.4V16h4v-3.32c1.16-.17 2.22-.6 3.15-1.25l2.35 2.35L17.5 12.5l-2.35-2.35c.65-.93 1.08-1.99 1.25-3.15H20z"/></svg>
-                    </div>
-                    <div>
-                      <h4 className="text-[14px] font-bold text-slate-800 dark:text-slate-200">微信</h4>
-                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">当前未绑定微信账号</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" className="h-8 px-4 text-[13px] border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700">绑定</Button>
-                </div>
-
-                <div className="flex items-center justify-between py-4 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11 2h2v20h-2zM2 11h20v2H2z"/></svg> 
-                    </div>
-                    <div>
-                      <h4 className="text-[14px] font-bold text-slate-800 dark:text-slate-200">钉钉</h4>
-                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">已绑定：李某某 (133****1234)</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" className="h-8 px-4 text-[13px] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800">解绑</Button>
-                </div>
+              <div className="max-w-2xl space-y-6">
+                <BindItem title="微信" description="当前未绑定微信账号" buttonLabel="绑定" />
+                <BindItem title="钉钉" description="当前未绑定钉钉账号" buttonLabel="绑定" />
               </div>
             )}
 
             {activeTab === 'realName' && (
               <div className="space-y-8">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <div className="mb-6 flex items-center space-x-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+                    <Fingerprint className="h-[18px] w-[18px]" />
                   </div>
-                  <h3 className="text-[15px] font-bold text-slate-800 dark:text-slate-200">您已完成实名认证</h3>
+                  <h3 className="text-[15px] font-bold text-slate-800 dark:text-slate-200">当前未接入实名认证数据</h3>
                 </div>
-                
-                <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 max-w-2xl">
-                  <div className="space-y-6">
-                    <div className="flex items-start">
-                      <span className="w-20 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">真实姓名</span>
-                      <span className="text-[13px] text-slate-800 dark:text-slate-200 font-medium font-mono">李*欣</span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="w-20 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">证件类型</span>
-                      <span className="text-[13px] text-slate-800 dark:text-slate-200">居民身份证</span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="w-20 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">证件号码</span>
-                      <span className="text-[13px] text-slate-800 dark:text-slate-200 font-mono">110105********1234</span>
-                    </div>
-                    <div className="flex items-start">
-                      <span className="w-20 text-[13px] text-slate-500 dark:text-slate-400 shrink-0">认证时间</span>
-                      <span className="text-[13px] text-slate-800 dark:text-slate-200 font-mono text-slate-500 dark:text-slate-400">2023-11-20 14:00:23</span>
-                    </div>
-                  </div>
+                <div className="max-w-2xl rounded-lg border border-slate-100 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900">
+                  <p className="text-[13px] leading-6 text-slate-500 dark:text-slate-400">
+                    该模块当前使用桌面端静态占位，后续如 go-admin 提供实名接口，可直接接入 BFF 展示。
+                  </p>
                 </div>
               </div>
             )}
 
             {activeTab === 'device' && (
-              <div className="space-y-6 max-w-4xl">
-                 <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-4 border-l-2 border-[#10B981] pl-2">最近登录设备</h3>
-                 
-                 <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
-                    <Table className="w-full text-[13px] text-slate-600 dark:text-slate-400">
-                      <TableHeader className="bg-[#F8FAFC]">
-                        <TableRow className="hover:bg-transparent border-slate-100 dark:border-slate-800">
-                          <TableHead className="font-bold h-10 pl-6">设备名称</TableHead>
-                          <TableHead className="font-bold h-10 w-40">IP / 地点</TableHead>
-                          <TableHead className="font-bold h-10 w-48">最近登录时间</TableHead>
-                          <TableHead className="font-bold h-10 w-24 text-right pr-6">操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                         <TableRow className="hover:bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800">
-                            <TableCell className="h-12 py-2 pl-6">
-                               <div className="flex items-center space-x-3">
-                                  <Monitor className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                                  <div>
-                                     <div className="font-medium text-slate-700 dark:text-slate-300 flex items-center">
-                                       MacBook Pro - Chrome
-                                       <Badge className="ml-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 border-[#E2E8F0] dark:border-slate-700 h-5 px-1.5 text-[10px] shadow-none">本机</Badge>
-                                     </div>
-                                     <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">macOS 14.1.2 - 浏览器登录</div>
-                                  </div>
-                               </div>
-                            </TableCell>
-                            <TableCell className="h-12 py-2 font-mono text-[12px]">113.111.43.*<br/><span className="text-[11px] text-slate-400 dark:text-slate-500 font-sans">广东 广州</span></TableCell>
-                            <TableCell className="h-12 py-2 font-mono text-[12px] text-slate-500 dark:text-slate-400">2024-03-24 10:23:41</TableCell>
-                            <TableCell className="h-12 py-2 text-right pr-6">
-                               <span className="text-[12px] text-slate-300 dark:text-slate-600 dark:text-slate-400 cursor-not-allowed">下线</span>
-                            </TableCell>
-                         </TableRow>
-
-                         <TableRow className="hover:bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800">
-                            <TableCell className="h-12 py-2 pl-6">
-                               <div className="flex items-center space-x-3">
-                                  <div className="w-4 h-4 text-slate-400 dark:text-slate-500 border border-current rounded flex items-center justify-center text-[8px] font-bold shrink-0">iP</div>
-                                  <div>
-                                     <div className="font-medium text-slate-700 dark:text-slate-300">iPhone 14 Pro Max</div>
-                                     <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">iOS 17.2 - App 登录</div>
-                                  </div>
-                               </div>
-                            </TableCell>
-                            <TableCell className="h-12 py-2 font-mono text-[12px]">120.231.11.*<br/><span className="text-[11px] text-slate-400 dark:text-slate-500 font-sans">北京</span></TableCell>
-                            <TableCell className="h-12 py-2 font-mono text-[12px] text-slate-500 dark:text-slate-400">2024-03-21 18:41:09</TableCell>
-                            <TableCell className="h-12 py-2 text-right pr-6">
-                               <button className="text-[12px] text-red-500 hover:text-red-600 transition-colors font-medium">下线</button>
-                            </TableCell>
-                         </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
+              <div className="max-w-4xl space-y-6">
+                <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">当前登录设备</h3>
+                <div className="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+                  <Table className="w-full text-[13px] text-slate-600 dark:text-slate-400">
+                    <TableHeader className="bg-[#F8FAFC] dark:bg-slate-900">
+                      <TableRow className="border-slate-100 hover:bg-transparent dark:border-slate-800">
+                        <TableHead className="h-10 pl-6 font-bold">设备名称</TableHead>
+                        <TableHead className="h-10 w-48 font-bold">类型</TableHead>
+                        <TableHead className="h-10 w-48 font-bold">状态</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow className="border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900">
+                        <TableCell className="h-12 py-2 pl-6">
+                          <div className="flex items-center space-x-3">
+                            <Monitor className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                            <div>
+                              <div className="flex items-center font-medium text-slate-700 dark:text-slate-300">
+                                Electron Desktop
+                                <Badge className="ml-2 h-5 border-[#E2E8F0] bg-emerald-50 px-1.5 text-[10px] text-emerald-600 shadow-none hover:bg-emerald-50 dark:border-slate-700">
+                                  当前设备
+                                </Badge>
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">桌面端登录会话</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="h-12 py-2 font-mono text-[12px]">桌面应用</TableCell>
+                        <TableCell className="h-12 py-2 text-[12px] text-slate-500 dark:text-slate-400">在线</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
 
             {activeTab === 'logout' && (
               <div className="max-w-2xl py-4">
-                 <div className="flex items-start space-x-4 p-5 bg-red-50 border border-red-100 rounded-lg">
-                    <div className="mt-0.5 text-red-500">
-                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <div className="flex items-start space-x-4 rounded-lg border border-red-100 bg-red-50 p-5">
+                  <div className="mt-0.5 text-red-500">
+                    <LogOut className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="mb-2 text-[15px] font-bold text-red-800">退出当前账号</h3>
+                    <p className="mb-4 text-[13px] leading-relaxed text-red-600/90">
+                      退出后需要重新登录桌面端才可继续访问系统。当前版本不会删除后端账号，仅清除本地登录态。
+                    </p>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox id="confirm-logout" checked className="pointer-events-none opacity-100 data-[state=checked]:border-red-500 data-[state=checked]:bg-red-500" />
+                      <Label htmlFor="confirm-logout" className="cursor-pointer text-[13px] font-bold text-red-800">
+                        我已确认退出当前账号
+                      </Label>
                     </div>
-                    <div className="flex-1">
-                       <h3 className="text-[15px] font-bold text-red-800 mb-2">注销账号风险提示</h3>
-                       <p className="text-[13px] text-red-600/90 leading-relaxed mb-4">
-                         账号注销为不可逆操作。注销后，您将无法再使用该账号登录系统，且账号下的所有资产、数据、权限历史均会被永久清理并不可恢复。
-                       </p>
-                       <ul className="list-disc pl-4 text-[13px] text-red-600/80 space-y-1 mb-6">
-                         <li>清空系统关联的业务角色与权限数据</li>
-                         <li>解除绑定的手机号、邮箱、微信等三方平台</li>
-                         <li>清空历史操作记录、个人设置资料</li>
-                       </ul>
-                       <div className="flex items-center space-x-2">
-                         <Checkbox id="confirm-logout" className="opacity-100 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500" />
-                         <Label htmlFor="confirm-logout" className="text-[13px] text-red-800 font-bold cursor-pointer">我已充分了解上述风险，并自愿注销该账号</Label>
-                       </div>
-                       
-                       <div className="mt-8">
-                         <Button className="bg-red-500 hover:bg-red-600 text-white border-[#E2E8F0] dark:border-slate-700 shadow-sm opacity-60 pointer-events-none px-6">下一步，验证身份</Button>
-                       </div>
+                    <div className="mt-8">
+                      <Button className="bg-red-500 px-6 text-white hover:bg-red-600" onClick={handleLogout}>立即退出</Button>
                     </div>
-                 </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
-
     </div>
-  );
+  )
+}
+
+function ProfileField({ label, value, strong, mono }: { label: string; value: string; strong?: boolean; mono?: boolean }) {
+  return (
+    <div className="flex items-start">
+      <span className="w-16 shrink-0 pt-0.5 text-[13px] text-slate-500 dark:text-slate-400">{label}</span>
+      <span
+        className={cn(
+          'ml-8 text-[13px] text-slate-800 dark:text-slate-200',
+          strong && 'font-medium',
+          mono && 'font-mono',
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function BindItem({ title, description, buttonLabel }: { title: string; description: string; buttonLabel: string }) {
+  return (
+    <div className="flex items-center justify-between border-b border-slate-100 py-4 dark:border-slate-800">
+      <div className="flex items-center space-x-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+          <Link2 className="h-5 w-5" />
+        </div>
+        <div>
+          <h4 className="text-[14px] font-bold text-slate-800 dark:text-slate-200">{title}</h4>
+          <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{description}</p>
+        </div>
+      </div>
+      <Button variant="outline" className="h-8 px-4 text-[13px]">
+        {buttonLabel}
+      </Button>
+    </div>
+  )
+}
+
+function resolveAvatarSrc(avatar: string | undefined): string {
+  if (!avatar) {
+    return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
+  }
+
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+    return avatar
+  }
+
+  const goAdminBaseURL = String(import.meta.env.VITE_GOADMIN_BASE_URL ?? '').replace(/\/$/, '')
+  if (goAdminBaseURL && avatar.startsWith('/')) {
+    return `${goAdminBaseURL}${avatar}`
+  }
+
+  return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
 }
