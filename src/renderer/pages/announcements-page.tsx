@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { Pagination } from '../components/pagination'
 import { useDesktopAnnouncementsQuery } from '../hooks/use-desktop-announcements-query'
@@ -25,8 +26,10 @@ import { cn } from '@/lib/utils'
 type EditableAnnouncement = { id: number; title: string; type: string; status: string; publish: string; create: string }
 
 export function AnnouncementsPage() {
-  const [titleInput, setTitleInput] = useState('')
-  const [title, setTitle] = useState('')
+  const [searchParams] = useSearchParams()
+  const initialTitle = searchParams.get('title') ?? ''
+  const [titleInput, setTitleInput] = useState(initialTitle)
+  const [title, setTitle] = useState(initialTitle)
   const [type, setType] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)

@@ -45,3 +45,9 @@ export async function updateDesktopMonitorStatus(id: number, status: 'ignored' |
     body: JSON.stringify({ id, status }),
   })
 }
+
+export async function collectDesktopMonitor(): Promise<void> {
+  await apiRequest<{ success: boolean }>('/desktop/monitor/collect', {
+    method: 'POST',
+  })
+}

@@ -49,7 +49,7 @@ const SelectValue = React.forwardRef<HTMLSpanElement, any>(({ className, placeho
     <span 
       ref={ref} 
       data-slot="select-value"
-      className={cn("flex flex-1 items-center gap-1.5 truncate text-left pointer-events-none", !value && "text-muted-foreground", className)} 
+      className={cn("flex flex-1 items-center gap-1.5 truncate text-left pointer-events-none min-w-0", !value && "text-muted-foreground", className)} 
       {...props}
     >
       {display}

@@ -44,10 +44,10 @@ export function UsageStatsPage() {
 
       {/* Top Filter Bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
-        <div className="flex items-center space-x-3">
-          <Label className="text-[13px] text-slate-700 dark:text-slate-300 font-medium">租户名称</Label>
+        <div className="flex items-center space-x-3 shrink-0">
+          <Label className="text-[13px] text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap shrink-0">租户名称</Label>
           <Select value={tenantCode} onValueChange={setTenantCode}>
-            <SelectTrigger className="h-8 w-48 text-[13px] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800">
+            <SelectTrigger className="h-8 w-60 text-[13px] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800">
               <SelectValue placeholder="请选择" />
             </SelectTrigger>
             <SelectContent>

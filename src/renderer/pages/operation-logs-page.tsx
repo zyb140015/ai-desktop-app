@@ -23,16 +23,14 @@ import { useDesktopOperationLogsQuery } from '../hooks/use-desktop-log-query'
 import { exportCsvFile, showActionError, showActionSuccess } from '../lib/action-feedback'
 
 export function OperationLogsPage() {
-  const [startDate, setStartDate] = React.useState<Date>()
-  const [endDate, setEndDate] = React.useState<Date>()
+  const [operationDate, setOperationDate] = React.useState<Date>()
   const [nameInput, setNameInput] = React.useState('')
   const [name, setName] = React.useState('')
   const [status, setStatus] = React.useState('')
-  const [selectedStartDate, setSelectedStartDate] = React.useState('')
-  const [selectedEndDate, setSelectedEndDate] = React.useState('')
+  const [selectedOperationDate, setSelectedOperationDate] = React.useState('')
   const [page, setPage] = React.useState(1)
   const pageSize = 10
-  const query = useDesktopOperationLogsQuery({ name, status, startDate: selectedStartDate, endDate: selectedEndDate, page, pageSize })
+  const query = useDesktopOperationLogsQuery({ name, status, operationDate: selectedOperationDate, page, pageSize })
   const logsData = query.data?.items ?? []
   const total = query.data?.total ?? 0
 
@@ -57,57 +55,31 @@ export function OperationLogsPage() {
                  <Input type="text" placeholder="请输入" className="h-8 w-48 text-[13px]" value={nameInput} onChange={(event) => setNameInput(event.target.value)} />
               </div>
               <div className="flex items-center">
-                 <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">开始日期:</Label>
+                 <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">操作时间:</Label>
                   <Popover>
                      <PopoverTrigger
-                       className={cn(
-                         "inline-flex h-8 w-48 items-center justify-start rounded-lg border border-slate-200 bg-background px-2.5 text-left text-[13px] font-normal outline-none transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-                          !startDate && "text-slate-400 dark:text-slate-500"
-                        )}
-                      >
-                        {startDate ? format(startDate, "PPP") : <span>请选择</span>}
-                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                     </PopoverTrigger>
-                     <PopoverContent className="w-auto p-0" align="start">
-                       <Calendar
-                        mode="single"
-                         selected={startDate}
-                          onSelect={(value) => {
-                            setStartDate(value)
-                            setSelectedStartDate(value ? format(value, 'yyyy-MM-dd') : '')
-                            setPage(1)
-                          }}
-                         initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-               </div>
-               <div className="flex items-center">
-                  <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">结束日期:</Label>
-                   <Popover>
-                      <PopoverTrigger
                         className={cn(
                           "inline-flex h-8 w-48 items-center justify-start rounded-lg border border-slate-200 bg-background px-2.5 text-left text-[13px] font-normal outline-none transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-                          !endDate && "text-slate-400 dark:text-slate-500"
-                        )}
-                      >
-                        {endDate ? format(endDate, "PPP") : <span>请选择</span>}
+                           !operationDate && "text-slate-400 dark:text-slate-500"
+                         )}
+                       >
+                         {operationDate ? format(operationDate, "PPP") : <span>请选择</span>}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                     </PopoverTrigger>
+                     <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                          mode="single"
-                         selected={endDate}
-                          onSelect={(value) => {
-                            setEndDate(value)
-                            setSelectedEndDate(value ? format(value, 'yyyy-MM-dd') : '')
-                            setPage(1)
-                          }}
-                         initialFocus
+                          selected={operationDate}
+                           onSelect={(value) => {
+                             setOperationDate(value)
+                             setSelectedOperationDate(value ? format(value, 'yyyy-MM-dd') : '')
+                             setPage(1)
+                           }}
+                          initialFocus
                        />
                      </PopoverContent>
                    </Popover>
-               </div>
+                </div>
               <div className="flex items-center">
                  <Label className="text-[13px] text-slate-700 dark:text-slate-300 mr-3 shrink-0 font-medium whitespace-nowrap">日志状态:</Label>
                   <RadioGroup value={status || 'all'} onValueChange={(value: string) => setStatus(value === 'all' ? '' : value)} className="flex items-center space-x-3">
@@ -128,7 +100,7 @@ export function OperationLogsPage() {
            </div>
            
            <div className="flex items-center space-x-3 shrink-0 ml-4">
-                <Button variant="outline" className="h-8 px-5 text-[13px] text-slate-600 dark:text-slate-400" onClick={() => { setNameInput(''); setName(''); setStatus(''); setStartDate(undefined); setEndDate(undefined); setSelectedStartDate(''); setSelectedEndDate(''); setPage(1) }}>重置</Button>
+                 <Button variant="outline" className="h-8 px-5 text-[13px] text-slate-600 dark:text-slate-400" onClick={() => { setNameInput(''); setName(''); setStatus(''); setOperationDate(undefined); setSelectedOperationDate(''); setPage(1) }}>重置</Button>
                <Button className="h-8 px-5 bg-[#10B981] text-[13px] text-white hover:bg-emerald-600" onClick={() => { setName(nameInput.trim()); setPage(1) }}>查询</Button>
                <Button className="h-8 px-5 bg-[#10B981] text-[13px] text-white hover:bg-emerald-600" onClick={handleExport}>导出</Button>
            </div>

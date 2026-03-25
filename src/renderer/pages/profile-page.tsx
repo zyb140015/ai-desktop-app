@@ -16,7 +16,10 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useCurrentMenusQuery } from '../hooks/use-current-menus-query'
+import { showActionSuccess } from '../lib/action-feedback'
+import { resolveVisibleMenuIds, saveVisibleMenuIds } from '../lib/menu-visibility'
 import { changePassword, updateProfile, uploadAvatar } from '../services/auth-api'
 import { ApiError } from '../services/http-client'
 import { useAuthStore } from '../store/auth-store'
@@ -40,27 +43,58 @@ export function ProfilePage() {
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser)
   const { data: menuResponse } = useCurrentMenusQuery()
   const [activeTab, setActiveTab] = React.useState<ProfileTabKey>('basic')
+  const [isEditingBasic, setIsEditingBasic] = React.useState(false)
+  const [isEditingPermission, setIsEditingPermission] = React.useState(false)
   const [profileUsername, setProfileUsername] = React.useState(currentUser?.username ?? '')
+  const [profileAvatar, setProfileAvatar] = React.useState(currentUser?.avatar ?? '')
+  const [profileAvatarPreview, setProfileAvatarPreview] = React.useState<string | null>(null)
   const [profileSex, setProfileSex] = React.useState(currentUser?.sex ?? '0')
-  const [profileMessage, setProfileMessage] = React.useState<string | null>(null)
   const [profileError, setProfileError] = React.useState<string | null>(null)
   const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false)
   const [oldPassword, setOldPassword] = React.useState('')
   const [newPassword, setNewPassword] = React.useState('')
   const [confirmPassword, setConfirmPassword] = React.useState('')
-  const [passwordMessage, setPasswordMessage] = React.useState<string | null>(null)
   const [passwordError, setPasswordError] = React.useState<string | null>(null)
   const [isUpdatingPassword, setIsUpdatingPassword] = React.useState(false)
+  const [visibleMenuIds, setVisibleMenuIds] = React.useState<number[]>([])
 
   const displayName = currentUser?.username?.trim() || '未登录'
-  const avatarSrc = resolveAvatarSrc(currentUser?.avatar)
+  const sidebarAvatarSrc = resolveAvatarSrc(currentUser?.avatar)
+  const editorAvatarSrc = profileAvatarPreview ?? resolveAvatarSrc(profileAvatar || currentUser?.avatar)
   const accessibleMenus = (menuResponse?.list ?? []).filter((menu) => menu.level >= 1)
+  const visibleMenus = accessibleMenus.filter((menu) => visibleMenuIds.includes(menu.id))
 
   React.useEffect(() => {
     setProfileUsername(currentUser?.username ?? '')
+    setProfileAvatar(currentUser?.avatar ?? '')
+    setProfileAvatarPreview(null)
     setProfileSex(currentUser?.sex ?? '0')
-  }, [currentUser?.sex, currentUser?.username])
+  }, [currentUser?.avatar, currentUser?.sex, currentUser?.username])
+
+  React.useEffect(() => {
+    return () => {
+      if (profileAvatarPreview) {
+        URL.revokeObjectURL(profileAvatarPreview)
+      }
+    }
+  }, [profileAvatarPreview])
+
+  React.useEffect(() => {
+    setVisibleMenuIds(resolveVisibleMenuIds(accessibleMenus))
+  }, [menuResponse?.list])
+
+  React.useEffect(() => {
+    if (activeTab !== 'basic') {
+      setIsEditingBasic(false)
+      setProfileError(null)
+      setProfileAvatarPreview(null)
+    }
+    if (activeTab !== 'permission') {
+      setIsEditingPermission(false)
+      setVisibleMenuIds(resolveVisibleMenuIds(accessibleMenus))
+    }
+  }, [activeTab])
 
   const handleLogout = () => {
     clearSession()
@@ -68,7 +102,6 @@ export function ProfilePage() {
   }
 
   const handlePasswordSubmit = async () => {
-    setPasswordMessage(null)
     setPasswordError(null)
 
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -89,7 +122,7 @@ export function ProfilePage() {
     setIsUpdatingPassword(true)
     try {
       const result = await changePassword({ oldPassword, newPassword })
-      setPasswordMessage(result.message)
+      showActionSuccess(result.message || '密码修改成功')
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
@@ -105,21 +138,35 @@ export function ProfilePage() {
   }
 
   const handleProfileSubmit = async () => {
-    setProfileMessage(null)
     setProfileError(null)
-    if (!profileUsername.trim()) {
+    const nextUsername = profileUsername.trim()
+    const nextAvatar = profileAvatar
+    const nextSex = profileSex
+
+    if (!nextUsername) {
       setProfileError('用户名不能为空')
       return
     }
+
+    if (
+      nextUsername === (currentUser?.username ?? '') &&
+      nextAvatar === (currentUser?.avatar ?? '') &&
+      nextSex === (currentUser?.sex ?? '0')
+    ) {
+      setIsEditingBasic(false)
+      return
+    }
+
     setIsUpdatingProfile(true)
     try {
       const user = await updateProfile({
-        username: profileUsername.trim(),
-        avatar: currentUser?.avatar || '',
-        sex: profileSex,
+        username: nextUsername,
+        avatar: nextAvatar,
+        sex: nextSex,
       })
       setCurrentUser({ ...currentUser, ...user } as typeof currentUser)
-      setProfileMessage('资料保存成功')
+      showActionSuccess('资料保存成功')
+      setIsEditingBasic(false)
     } catch (error) {
       if (error instanceof ApiError) {
         setProfileError(error.message)
@@ -133,23 +180,29 @@ export function ProfilePage() {
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file || !currentUser) {
+    if (!file || !currentUser || !isEditingBasic) {
       return
     }
 
-    setProfileMessage(null)
     setProfileError(null)
     setIsUploadingAvatar(true)
+    const localPreview = URL.createObjectURL(file)
+    setProfileAvatarPreview((previous) => {
+      if (previous) {
+        URL.revokeObjectURL(previous)
+      }
+      return localPreview
+    })
     try {
       const result = await uploadAvatar(file)
-      const user = await updateProfile({
-        username: profileUsername.trim() || currentUser.username,
-        avatar: result.avatar,
-        sex: profileSex,
-      })
-      setCurrentUser({ ...currentUser, ...user })
-      setProfileMessage('头像更新成功')
+      setProfileAvatar(result.avatar)
     } catch (error) {
+      setProfileAvatarPreview((previous) => {
+        if (previous) {
+          URL.revokeObjectURL(previous)
+        }
+        return null
+      })
       setProfileError(error instanceof Error ? error.message : '头像上传失败，请稍后重试')
     } finally {
       setIsUploadingAvatar(false)
@@ -157,11 +210,42 @@ export function ProfilePage() {
     }
   }
 
+  const handleBasicAction = async () => {
+    if (!isEditingBasic) {
+      setProfileError(null)
+      setIsEditingBasic(true)
+      return
+    }
+    await handleProfileSubmit()
+  }
+
+  const handlePermissionAction = () => {
+    if (!isEditingPermission) {
+      setVisibleMenuIds(resolveVisibleMenuIds(accessibleMenus))
+      setIsEditingPermission(true)
+      return
+    }
+    saveVisibleMenuIds(visibleMenuIds)
+    setIsEditingPermission(false)
+    showActionSuccess('权限设置已保存')
+  }
+
+  const toggleVisibleMenu = (menuId: number) => {
+    setVisibleMenuIds((prev) => {
+      if (prev.includes(menuId)) {
+        return prev.filter((item) => item !== menuId)
+      }
+      return [...prev, menuId]
+    })
+  }
+
+  const formattedCreatedAt = formatProfileDateTime(currentUser?.createdAt)
+
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px]">
       <div className="flex w-[300px] shrink-0 flex-col items-center pt-8">
         <div className="mb-2 h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-cyan-100 to-emerald-100 shadow-lg">
-          <img src={avatarSrc} alt={displayName} className="h-full w-full object-cover" />
+          <img src={sidebarAvatarSrc} alt={displayName} className="h-full w-full object-cover" />
         </div>
         <div className="mt-2 text-center">
           <div className="text-[15px] font-semibold text-slate-800 dark:text-slate-100">{displayName}</div>
@@ -197,15 +281,15 @@ export function ProfilePage() {
             <h2 className="text-[14px] font-bold text-slate-800 dark:text-slate-200">
               {profileTabs.find((item) => item.key === activeTab)?.label}
             </h2>
-            {activeTab === 'logout' ? (
-              <Button className="h-[28px] bg-red-500 px-4 text-[12px] font-medium text-white hover:bg-red-600" onClick={handleLogout}>
-                立即退出
+            {activeTab === 'logout' ? null : activeTab === 'basic' ? (
+              <Button className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600" disabled={isUpdatingProfile || isUploadingAvatar} onClick={handleBasicAction}>
+                {isEditingBasic ? (isUpdatingProfile ? '保存中...' : '保存') : '编辑'}
               </Button>
-            ) : activeTab === 'basic' ? (
-              <Button className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600" disabled={isUpdatingProfile || isUploadingAvatar} onClick={handleProfileSubmit}>
-                {isUpdatingProfile ? '保存中...' : '保存'}
+            ) : activeTab === 'permission' ? (
+              <Button className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600" onClick={handlePermissionAction}>
+                {isEditingPermission ? '保存' : '编辑'}
               </Button>
-            ) : (
+            ) : activeTab === 'account' || activeTab === 'bindAuth' || activeTab === 'realName' || activeTab === 'device' ? null : (
               <Button disabled className="h-[28px] bg-[#10B981] px-4 text-[12px] font-medium text-white hover:bg-emerald-600">
                 编辑
               </Button>
@@ -219,18 +303,26 @@ export function ProfilePage() {
                   <span className="w-16 shrink-0 pt-0.5 text-[13px] text-slate-500 dark:text-slate-400">头像</span>
                   <div className="ml-8 flex items-center gap-4">
                     <div className="h-16 w-16 overflow-hidden rounded-full border border-slate-200 dark:border-slate-700">
-                      <img src={avatarSrc} alt={displayName} className="h-full w-full object-cover" />
+                      <img src={editorAvatarSrc} alt={displayName} className="h-full w-full object-cover" />
                     </div>
-                    <label className="cursor-pointer text-[13px] text-[#10B981] hover:text-emerald-600">
-                      {isUploadingAvatar ? '上传中...' : '更换头像'}
-                      <input className="hidden" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} />
-                    </label>
+                    {isEditingBasic ? (
+                      <label className="cursor-pointer text-[13px] text-[#10B981] hover:text-emerald-600">
+                        {isUploadingAvatar ? '上传中...' : '更换头像'}
+                        <input className="hidden" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} />
+                      </label>
+                    ) : (
+                      <span className="text-[13px] text-slate-400 dark:text-slate-500">点击编辑后可修改</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-start">
                   <span className="w-16 shrink-0 pt-2 text-[13px] text-slate-500 dark:text-slate-400">姓名</span>
                   <div className="ml-8 w-full max-w-sm">
-                    <Input value={profileUsername} onChange={(event) => setProfileUsername(event.target.value)} placeholder="请输入用户名" />
+                    {isEditingBasic ? (
+                      <Input value={profileUsername} onChange={(event) => setProfileUsername(event.target.value)} placeholder="请输入用户名" />
+                    ) : (
+                      <div className="pt-2 text-[13px] text-slate-800 dark:text-slate-200">{profileUsername || '-'}</div>
+                    )}
                   </div>
                 </div>
                 <ProfileField label="用户ID" value={String(currentUser?.id ?? '-')} mono />
@@ -246,41 +338,33 @@ export function ProfilePage() {
                 <div className="flex items-start">
                   <span className="w-16 shrink-0 pt-2 text-[13px] text-slate-500 dark:text-slate-400">性别</span>
                   <div className="ml-8 flex gap-2">
-                    {[
-                      { value: '0', label: '未知' },
-                      { value: '1', label: '男' },
-                      { value: '2', label: '女' },
-                    ].map((option) => (
-                      <Button
-                        key={option.value}
-                        variant={profileSex === option.value ? 'default' : 'outline'}
-                        type="button"
-                        onClick={() => setProfileSex(option.value)}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
+                    {isEditingBasic ? (
+                      <RadioGroup value={profileSex} onValueChange={setProfileSex} className="flex items-center space-x-4 pt-2">
+                        {[
+                          { value: '0', label: '未知' },
+                          { value: '1', label: '男' },
+                          { value: '2', label: '女' },
+                        ].map((option) => (
+                          <div key={option.value} className="flex items-center space-x-1.5">
+                            <RadioGroupItem value={option.value} id={`profile-sex-${option.value}`} />
+                            <Label htmlFor={`profile-sex-${option.value}`} className="cursor-pointer text-[13px] text-slate-600 dark:text-slate-400 font-normal">
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    ) : (
+                      <div className="pt-2 text-[13px] text-slate-800 dark:text-slate-200">{formatProfileSex(profileSex)}</div>
+                    )}
                   </div>
                 </div>
-                <ProfileField label="创建时间" value={currentUser?.createdAt || '-'} mono />
+                <ProfileField label="创建时间" value={formattedCreatedAt} mono />
                 {profileError ? <p className="text-[13px] text-red-500">{profileError}</p> : null}
-                {profileMessage ? <p className="text-[13px] text-emerald-600">{profileMessage}</p> : null}
               </div>
             )}
 
             {activeTab === 'account' && (
               <div className="space-y-8">
-                <div className="space-y-6">
-                <ProfileField label="账号" value={displayName} mono />
-                <ProfileField label="手机号" value={currentUser?.phone || '未设置'} mono />
-                <ProfileField label="密码" value="******" />
-                <ProfileField label="邮箱" value={currentUser?.email || '未设置'} mono />
-                <div className="flex items-center">
-                  <span className="w-16 shrink-0 text-[13px] text-slate-500 dark:text-slate-400">备注</span>
-                  <span className="ml-8 text-[13px] text-slate-800 dark:text-slate-200">{currentUser?.remark || '无'}</span>
-                </div>
-              </div>
-
                 <div>
                   <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">修改密码</h3>
                   <div className="max-w-xl space-y-4 rounded-lg border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -297,7 +381,6 @@ export function ProfilePage() {
                       <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="请再次输入新密码" />
                     </div>
                     {passwordError ? <p className="text-[13px] text-red-500">{passwordError}</p> : null}
-                    {passwordMessage ? <p className="text-[13px] text-emerald-600">{passwordMessage}</p> : null}
                     <div className="flex justify-end">
                       <Button className="bg-[#10B981] text-white hover:bg-emerald-600" disabled={isUpdatingPassword} onClick={handlePasswordSubmit}>
                         {isUpdatingPassword ? '提交中...' : '更新密码'}
@@ -313,8 +396,8 @@ export function ProfilePage() {
                 <div>
                   <h3 className="mb-4 border-l-2 border-[#10B981] pl-2 text-[13px] font-bold text-slate-800 dark:text-slate-200">当前可访问菜单</h3>
                   <div className="flex flex-wrap gap-2">
-                    {accessibleMenus.length > 0 ? (
-                      accessibleMenus.map((menu) => (
+                    {visibleMenus.length > 0 ? (
+                      visibleMenus.map((menu) => (
                         <Badge key={`${menu.parentId}-${menu.id}`} variant="outline" className="border-[#E2E8F0] dark:border-slate-700">
                           {menu.name}
                         </Badge>
@@ -340,7 +423,7 @@ export function ProfilePage() {
                           <TableRow key={menu.id} className="border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900">
                             <TableCell className="h-12 border-r border-slate-100 font-medium dark:border-slate-800">{menu.name}</TableCell>
                             <TableCell className="h-12 p-0 text-center align-middle">
-                              <input type="checkbox" checked className="ai-checkbox pointer-events-none opacity-80" readOnly />
+                              <input type="checkbox" checked={visibleMenuIds.includes(menu.id)} className="ai-checkbox disabled:cursor-not-allowed disabled:opacity-80" readOnly={!isEditingPermission} disabled={!isEditingPermission} onChange={() => toggleVisibleMenu(menu.id)} />
                             </TableCell>
                           </TableRow>
                         ))}
@@ -366,11 +449,11 @@ export function ProfilePage() {
                   </div>
                   <h3 className="text-[15px] font-bold text-slate-800 dark:text-slate-200">当前未接入实名认证数据</h3>
                 </div>
-                <div className="max-w-2xl rounded-lg border border-slate-100 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900">
+                {/* <div className="max-w-2xl rounded-lg border border-slate-100 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900">
                   <p className="text-[13px] leading-6 text-slate-500 dark:text-slate-400">
                     该模块当前使用桌面端静态占位，后续如 go-admin 提供实名接口，可直接接入 BFF 展示。
                   </p>
-                </div>
+                </div> */}
               </div>
             )}
 
@@ -413,23 +496,28 @@ export function ProfilePage() {
 
             {activeTab === 'logout' && (
               <div className="max-w-2xl py-4">
-                <div className="flex items-start space-x-4 rounded-lg border border-red-100 bg-red-50 p-5">
-                  <div className="mt-0.5 text-red-500">
-                    <LogOut className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="mb-2 text-[15px] font-bold text-red-800">退出当前账号</h3>
-                    <p className="mb-4 text-[13px] leading-relaxed text-red-600/90">
-                      退出后需要重新登录桌面端才可继续访问系统。当前版本不会删除后端账号，仅清除本地登录态。
-                    </p>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox id="confirm-logout" checked className="pointer-events-none opacity-100 data-[state=checked]:border-red-500 data-[state=checked]:bg-red-500" />
-                      <Label htmlFor="confirm-logout" className="cursor-pointer text-[13px] font-bold text-red-800">
-                        我已确认退出当前账号
-                      </Label>
+                <div className="relative overflow-hidden rounded-xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/80 p-6 shadow-sm dark:border-red-900/40 dark:from-red-950/30 dark:via-slate-950 dark:to-red-950/10">
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-red-200/40 blur-2xl dark:bg-red-500/10" />
+                  <div className="relative flex items-start space-x-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500 shadow-sm dark:bg-red-500/10 dark:text-red-400">
+                      <LogOut className="h-5 w-5" />
                     </div>
-                    <div className="mt-8">
-                      <Button className="bg-red-500 px-6 text-white hover:bg-red-600" onClick={handleLogout}>立即退出</Button>
+                    <div className="flex-1">
+                      <h3 className="mb-2 text-[16px] font-bold text-red-800 dark:text-red-200">退出当前账号</h3>
+                      <p className="mb-5 text-[13px] leading-relaxed text-red-700/90 dark:text-red-200/80">
+                        退出后需要重新登录桌面端才可继续访问系统。当前版本不会删除后端账号，仅清除本地登录态。
+                      </p>
+                      <div className="rounded-lg border border-red-100 bg-white/80 p-3 dark:border-red-900/30 dark:bg-slate-900/70">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="confirm-logout" checked className="pointer-events-none opacity-100 data-[state=checked]:border-red-500 data-[state=checked]:bg-red-500" />
+                          <Label htmlFor="confirm-logout" className="cursor-pointer text-[13px] font-medium text-red-800 dark:text-red-200">
+                            我已确认退出当前账号
+                          </Label>
+                        </div>
+                      </div>
+                      <div className="mt-6 flex items-center justify-end">
+                        <Button className="bg-red-500 px-6 text-white shadow-sm hover:bg-red-600" onClick={handleLogout}>立即退出</Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -471,7 +559,7 @@ function BindItem({ title, description, buttonLabel }: { title: string; descript
           <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{description}</p>
         </div>
       </div>
-      <Button variant="outline" className="h-8 px-4 text-[13px]">
+      <Button type="button" variant="outline" className="h-8 px-4 text-[13px]" onClick={() => showActionSuccess(`${title}功能开发中`)}>
         {buttonLabel}
       </Button>
     </div>
@@ -483,14 +571,40 @@ function resolveAvatarSrc(avatar: string | undefined): string {
     return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
   }
 
-  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+  if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('blob:') || avatar.startsWith('data:')) {
     return avatar
   }
 
-  const goAdminBaseURL = String(import.meta.env.VITE_GOADMIN_BASE_URL ?? '').replace(/\/$/, '')
-  if (goAdminBaseURL && avatar.startsWith('/')) {
+  const goAdminBaseURL = String(import.meta.env.VITE_GOADMIN_BASE_URL ?? 'http://127.0.0.1:8081').replace(/\/$/, '')
+  if (avatar.startsWith('/')) {
     return `${goAdminBaseURL}${avatar}`
   }
 
-  return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
+  return `${goAdminBaseURL}/${avatar.replace(/^\/+/, '')}`
+}
+
+function formatProfileSex(value: string): string {
+  if (value === '1') return '男'
+  if (value === '2') return '女'
+  return '未知'
+}
+
+function formatProfileDateTime(value: string | undefined): string {
+  if (!value) {
+    return '-'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }

@@ -52,5 +52,4 @@ export const staticNavigationItems: NavigationItem[] = [
   },
   { to: '/monitor', label: '系统监控', icon: 'Activity', hasSub: false },
   { to: '/messages', label: '消息中心', icon: 'Clock', hasSub: false },
-  { to: '/sysconfig', label: '系统设置', icon: 'Settings', hasSub: false },
 ] 

@@ -1,13 +1,18 @@
 import { useState } from 'react'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import * as Icons from '../components/icons'
 import { Pagination } from '../components/pagination'
 import { useDesktopMonitorQuery } from '../hooks/use-desktop-monitor-query'
-import { updateDesktopMonitorStatus } from '../services/monitor-api'
+import { showActionError, showActionSuccess } from '../lib/action-feedback'
+import { collectDesktopMonitor, updateDesktopMonitorStatus } from '../services/monitor-api'
 
 const allLevel = '__all__'
 
 export function MonitorPage() {
+  const location = useLocation()
+  const presetMetric = (location.state as { metric?: string } | null)?.metric ?? ''
   const [metricInput, setMetricInput] = useState('')
   const [metric, setMetric] = useState('')
   const [level, setLevel] = useState(allLevel)
@@ -23,15 +28,49 @@ export function MonitorPage() {
 
   const tableData = query.data?.items ?? []
   const [activeMonitorId, setActiveMonitorId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isCollecting, setIsCollecting] = useState(false)
   const pagedData = tableData
+
+  useEffect(() => {
+    if (!presetMetric) {
+      return
+    }
+    setMetricInput(presetMetric)
+    setMetric(presetMetric)
+    setPage(1)
+  }, [presetMetric])
+
+  const statusLabelMap: Record<string, string> = {
+    pending: '待处理',
+    processing: '处理中',
+    ignored: '已忽略',
+    resolved: '已处理',
+  }
 
   const handleMonitorAction = async (id: number, status: 'ignored' | 'processing') => {
     setActiveMonitorId(id)
+    setActionError(null)
     try {
       await updateDesktopMonitorStatus(id, status)
       await query.refetch()
+    } catch {
+      setActionError('监控状态更新失败，请稍后重试')
     } finally {
       setActiveMonitorId(null)
+    }
+  }
+
+  const handleCollectMonitor = async () => {
+    setIsCollecting(true)
+    try {
+      await collectDesktopMonitor()
+      await query.refetch()
+      showActionSuccess('监控采集成功')
+    } catch {
+      showActionError('监控采集失败，请稍后重试')
+    } finally {
+      setIsCollecting(false)
     }
   }
 
@@ -69,9 +108,19 @@ export function MonitorPage() {
             </div>
             <div className="flex items-center">
               <span className="text-[13px] text-slate-700 dark:text-slate-300 mr-2 shrink-0 font-medium whitespace-nowrap">最近采集:</span>
-              <div className="relative flex w-48 items-center justify-between rounded border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                {query.data?.summary.lastCollectedAt || '暂无数据'}
-                <Icons.Clock className="w-[15px] h-[15px] text-slate-400 dark:text-slate-500" />
+              <div className="flex items-center gap-2">
+                <div className="relative flex w-48 items-center justify-between rounded border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                  {query.data?.summary.lastCollectedAt || '暂无数据'}
+                  <Icons.Clock className="w-[15px] h-[15px] text-slate-400 dark:text-slate-500" />
+                </div>
+                <button
+                  type="button"
+                  className="px-4 py-1.5 bg-[#10B981] rounded text-[13px] text-white hover:bg-emerald-600 transition-colors font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleCollectMonitor}
+                  disabled={isCollecting}
+                >
+                  {isCollecting ? '采集中...' : '立即采集'}
+                </button>
               </div>
             </div>
           </div>
@@ -108,6 +157,7 @@ export function MonitorPage() {
               <th className="py-3 px-4 font-bold">是否告警</th>
               <th className="py-3 px-4 font-bold">告警级别</th>
               <th className="py-3 px-4 font-bold">告警时间</th>
+              <th className="py-3 px-4 font-bold">处理状态</th>
               <th className="py-3 px-4 font-bold">告警说明</th>
               <th className="py-3 px-4 font-bold text-center">操作</th>
             </tr>
@@ -129,32 +179,34 @@ export function MonitorPage() {
                 </td>
                 <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{row.level}</td>
                 <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-slate-400">{row.occurredAt}</td>
+                <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{statusLabelMap[row.status] ?? row.status}</td>
                 <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.description}>{row.description}</td>
                 <td className="py-3.5 px-4 text-center space-x-2">
                   <button
                     className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={activeMonitorId === row.id}
+                    disabled={activeMonitorId === row.id || row.status === 'ignored'}
                     onClick={() => handleMonitorAction(row.id, 'ignored')}
                   >
-                    {activeMonitorId === row.id ? '处理中...' : '忽略'}
+                    {activeMonitorId === row.id ? '处理中...' : row.status === 'ignored' ? '已忽略' : '忽略'}
                   </button>
                   <button
                     className="px-2.5 py-[3px] bg-emerald-50/60 border border-emerald-100/60 text-[#10B981] text-[12px] font-medium rounded hover:bg-emerald-100 hover:border-emerald-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={activeMonitorId === row.id}
+                    disabled={activeMonitorId === row.id || row.status === 'processing' || row.status === 'resolved'}
                     onClick={() => handleMonitorAction(row.id, 'processing')}
                   >
-                    {activeMonitorId === row.id ? '处理中...' : '处理'}
+                    {activeMonitorId === row.id ? '处理中...' : row.status === 'resolved' ? '已处理' : row.status === 'processing' ? '处理中' : '处理'}
                   </button>
                 </td>
               </tr>
             ))}
             {!query.isLoading && tableData.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-10 px-4 text-center text-slate-500 dark:text-slate-400">暂无监控数据</td>
+                <td colSpan={9} className="py-10 px-4 text-center text-slate-500 dark:text-slate-400">暂无监控数据</td>
               </tr>
             ) : null}
           </tbody>
         </table>
+        {actionError ? <div className="px-6 pt-4 text-[13px] text-red-500">{actionError}</div> : null}
         {query.isLoading ? <div className="px-6 py-6 text-[13px] text-slate-500 dark:text-slate-400">加载中...</div> : null}
       </div>
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import * as Icons from '../components/icons'
 import { useDesktopMessagesQuery } from '../hooks/use-desktop-messages-query'
@@ -8,9 +9,11 @@ import { Pagination } from '../components/pagination'
 const allMessageType = '__all__'
 
 export function MessagesPage() {
+  const [searchParams] = useSearchParams()
+  const initialKeyword = searchParams.get('q') ?? ''
   const [messageType, setMessageType] = useState(allMessageType)
-  const [keywordInput, setKeywordInput] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const [keywordInput, setKeywordInput] = useState(initialKeyword)
+  const [keyword, setKeyword] = useState(initialKeyword)
   const [page, setPage] = useState(1)
   const pageSize = 10
 

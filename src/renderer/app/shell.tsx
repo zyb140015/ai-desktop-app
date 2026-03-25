@@ -1,15 +1,25 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { staticNavigationItems, type NavigationItem, type NavigationSubItem } from '../../shared/navigation'
 import * as Icons from '../components/icons'
+import { Input } from '../../components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Toaster } from '../../components/ui/sonner'
 import { toast } from 'sonner'
+import { showActionSuccess } from '../lib/action-feedback'
+import { filterMenusByVisibility } from '../lib/menu-visibility'
 import { useAuthStore } from '../store/auth-store'
 import { useCurrentMenusQuery } from '../hooks/use-current-menus-query'
+import { useDesktopMessagesQuery } from '../hooks/use-desktop-messages-query'
 import type { DesktopMenu } from '../services/menu-types'
 
 const themeStorageKey = 'theme'
 const defaultExpandedMenus = ['/logs']
+
+type SearchRouteItem = {
+  to: string
+  label: string
+}
 
 function hasSubItems(item: NavigationItem): item is NavigationItem & { subItems: readonly NavigationSubItem[] } {
   return Array.isArray(item.subItems) && item.subItems.length > 0
@@ -33,7 +43,10 @@ export function Shell() {
   const currentUser = useAuthStore((state) => state.currentUser)
   const clearSession = useAuthStore((state) => state.clearSession)
   const { data: menuResponse, isSuccess: menusReady } = useCurrentMenusQuery()
+  const messagesQuery = useDesktopMessagesQuery({ page: 1, pageSize: 100 })
   const [expandedMenus, setExpandedMenus] = useState<string[]>(defaultExpandedMenus)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem(themeStorageKey) === 'dark' ||
       (!localStorage.getItem(themeStorageKey) && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -68,9 +81,19 @@ export function Shell() {
 
   const displayName = currentUser?.username?.trim() || '未登录'
   const avatarSrc = resolveAvatarSrc(currentUser?.avatar)
-  const navigationItems = buildNavigationItems(menuResponse?.list ?? [])
+  const visibleMenus = filterMenusByVisibility(menuResponse?.list ?? [])
+  const navigationItems = buildNavigationItems(visibleMenus)
   const headerTitle = getDynamicHeaderTitle(location.pathname, navigationItems)
   const firstAccessiblePath = getFirstAccessiblePath(navigationItems)
+  const unreadMessageCount = (messagesQuery.data?.items ?? []).filter((item) => !item.read).length
+  const searchableRoutes = useMemo(() => flattenNavigationRoutes(navigationItems), [navigationItems])
+  const matchedRoutes = useMemo<SearchRouteItem[]>(() => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    if (!keyword) {
+      return searchableRoutes.slice(0, 8)
+    }
+    return searchableRoutes.filter((item) => item.label.toLowerCase().includes(keyword)).slice(0, 8)
+  }, [searchKeyword, searchableRoutes])
 
   useEffect(() => {
     if (!menusReady) {
@@ -84,9 +107,33 @@ export function Shell() {
     navigate(firstAccessiblePath, { replace: true })
   }, [firstAccessiblePath, location.pathname, menusReady, navigate, navigationItems])
 
+  useEffect(() => {
+    setIsSearchOpen(false)
+    setSearchKeyword('')
+  }, [location.pathname])
+
   const handleLogout = () => {
     clearSession()
     navigate('/login', { replace: true })
+  }
+
+  const handleSearchNavigate = (path: string) => {
+    navigate(path)
+    setIsSearchOpen(false)
+    setSearchKeyword('')
+  }
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') {
+      return
+    }
+
+    const firstMatch = matchedRoutes[0]
+    if (!firstMatch) {
+      return
+    }
+
+    handleSearchNavigate(firstMatch.to)
   }
 
   return (
@@ -164,7 +211,7 @@ export function Shell() {
         {/* Header */}
         <header className="h-12 lg:h-14 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-6 z-10 shrink-0 transition-colors">
           <div className="flex items-center">
-            <h1 className="text-[15px] font-bold text-slate-800 dark:text-slate-100 flex items-center">
+              <h1 className="text-[15px] font-bold text-slate-800 dark:text-slate-100 flex items-center">
               {location.pathname === '/sysconfig' && <Icons.Settings className="w-[18px] h-[18px] mr-2 text-slate-600 dark:text-slate-400" />}
               {location.pathname === '/monitor' && <Icons.Activity className="w-[18px] h-[18px] mr-2 text-slate-600 dark:text-slate-400" />}
               {location.pathname === '/announcements' && <Icons.Bell className="w-[18px] h-[18px] mr-2 text-slate-600 dark:text-slate-400" />}
@@ -180,19 +227,49 @@ export function Shell() {
               </h1>
           </div>
           <div className="flex items-center space-x-2">
-             <div className="flex items-center mr-2 cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700 p-1 rounded-full transition-colors">
+             <button type="button" onClick={() => navigate('/profile')} className="flex items-center mr-2 cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700 p-1 rounded-full transition-colors">
                  <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700">
                     <img src={avatarSrc} alt={displayName} className="w-full h-full object-cover" />
                  </div>
                  <span className="ml-2 mr-1 font-medium text-slate-700 dark:text-slate-300 text-[13px]">{displayName}</span>
-              </div>
-             
-             <button className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors"><Icons.Search className="w-[16px] h-[16px]" /></button>
-             <button className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors relative">
-               <Icons.Bell className="w-[16px] h-[16px]" />
-               <span className="absolute -top-0 -right-0 bg-red-500 text-white text-[9px] font-bold px-1 rounded-full border border-white dark:border-slate-900 leading-tight min-w-[14px] text-center">24</span>
-             </button>
-              <button className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors"><Icons.Globe className="w-[16px] h-[16px]" /></button>
+              </button>
+              
+             <Popover open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+                <PopoverTrigger>
+                  <button type="button" className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors" title="全局搜索">
+                    <Icons.Search className="w-[16px] h-[16px]" />
+                  </button>
+                </PopoverTrigger>
+               <PopoverContent align="end" className="w-80 p-3">
+                 <div className="space-y-3">
+                   <Input
+                     autoFocus
+                     value={searchKeyword}
+                     onChange={(event) => setSearchKeyword(event.target.value)}
+                     onKeyDown={handleSearchKeyDown}
+                     placeholder="搜索左侧菜单，如：用户管理"
+                   />
+                   <div className="max-h-64 space-y-1 overflow-y-auto">
+                     {matchedRoutes.length > 0 ? matchedRoutes.map((item) => (
+                       <button
+                         key={`${item.to}-${item.label}`}
+                         type="button"
+                         className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13px] text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                         onClick={() => handleSearchNavigate(item.to)}
+                       >
+                         <span>{item.label}</span>
+                         <span className="ml-3 text-[11px] text-slate-400">{item.to}</span>
+                       </button>
+                     )) : <div className="px-3 py-2 text-[12px] text-slate-400">未找到匹配菜单</div>}
+                   </div>
+                 </div>
+               </PopoverContent>
+             </Popover>
+             <button type="button" onClick={() => navigate('/messages')} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors relative" title="消息中心">
+                <Icons.Bell className="w-[16px] h-[16px]" />
+                {unreadMessageCount > 0 ? <span className="absolute -top-0 -right-0 bg-red-500 text-white text-[9px] font-bold px-1 rounded-full border border-white dark:border-slate-900 leading-tight min-w-[14px] text-center">{Math.min(unreadMessageCount, 99)}</span> : null}
+              </button>
+              <button type="button" onClick={() => showActionSuccess('国际化功能开发中')} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors" title="语言设置"><Icons.Globe className="w-[16px] h-[16px]" /></button>
               <button onClick={toggleDarkMode} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors">
                  {isDarkMode ? <Icons.Sun className="w-[16px] h-[16px]" /> : <Icons.Moon className="w-[16px] h-[16px]" />}
               </button>
@@ -246,6 +323,7 @@ function buildNavigationItems(menus: DesktopMenu[]): NavigationItem[] {
   }
 
   const topLevelMenus = menus
+    .filter((menu) => menu.path !== '/sysconfig')
     .filter((menu) => menu.parentId === 0)
     .sort((left, right) => left.sort - right.sort || left.id - right.id)
 
@@ -315,16 +393,16 @@ function resolveAvatarSrc(avatar: string | undefined): string {
     return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
   }
 
-  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+  if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('blob:') || avatar.startsWith('data:')) {
     return avatar
   }
 
-  const goAdminBaseURL = String(import.meta.env.VITE_GOADMIN_BASE_URL ?? '').replace(/\/$/, '')
-  if (goAdminBaseURL && avatar.startsWith('/')) {
+  const goAdminBaseURL = String(import.meta.env.VITE_GOADMIN_BASE_URL ?? 'http://127.0.0.1:8081').replace(/\/$/, '')
+  if (avatar.startsWith('/')) {
     return `${goAdminBaseURL}${avatar}`
   }
 
-  return 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix'
+  return `${goAdminBaseURL}/${avatar.replace(/^\/+/, '')}`
 }
 
 function isPathAllowed(pathname: string, navigationItems: NavigationItem[]): boolean {
@@ -350,4 +428,20 @@ function getFirstAccessiblePath(navigationItems: NavigationItem[]): string {
   }
 
   return '/'
+}
+
+function flattenNavigationRoutes(navigationItems: NavigationItem[]): SearchRouteItem[] {
+  const routes: SearchRouteItem[] = []
+
+  for (const item of navigationItems) {
+    if (item.to) {
+      routes.push({ to: item.to, label: item.label })
+    }
+
+    for (const subItem of item.subItems ?? []) {
+      routes.push({ to: subItem.to, label: subItem.label })
+    }
+  }
+
+  return routes
 }
