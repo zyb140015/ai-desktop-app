@@ -72,3 +72,9 @@ release/
 - 应用图标（ico）
 - 代码签名
 - 自动更新配置（如需要）
+
+详细发布说明见：
+
+```bash
+docs/release.md
+```
