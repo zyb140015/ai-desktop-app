@@ -133,7 +133,8 @@ export function OverviewPage() {
 
   const [activeTodoTab, setActiveTodoTab] = useState('todo');
   const [activeMsgTab, setActiveMsgTab] = useState('msg');
-  const defaultDate = new Date(2020, 8, 18);
+  const now = new Date();
+  const defaultDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(defaultDate);
   const [calendarMonth, setCalendarMonth] = useState<Date>(defaultDate);
 
@@ -421,26 +422,26 @@ export function OverviewPage() {
               </div>
 
               {/* Calendar */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 pt-4 flex flex-col flex-1 min-h-0 relative">
-                  <div className="flex-1 flex flex-col items-center justify-start overflow-hidden min-h-0 w-full">
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 pt-2.5 flex flex-col flex-1 min-h-0 relative">
+                  <div className="flex-1 flex flex-col items-center justify-start overflow-visible min-h-0 w-full">
                     {/* Custom Header replacing Calendar Nav */}
-                    <div className="flex items-center justify-between w-full px-0.5 mb-2.5 shrink-0 z-20">
+                    <div className="flex items-center justify-between w-full px-0.5 mb-1 shrink-0 z-20">
                       <div className="flex items-center">
                         <button 
                           type="button"
-                          className="w-8 h-8 flex items-center justify-center text-[#1e293b] hover:text-[#10B981] transition-colors ml-[-6px]"
+                          className="w-7 h-7 flex items-center justify-center text-[#1e293b] hover:text-[#10B981] transition-colors ml-[-4px]"
                           onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
                         >
-                          <Icons.ArrowRight className="w-[22px] h-[22px] rotate-180 stroke-[2]" />
+                          <Icons.ArrowRight className="w-[20px] h-[20px] rotate-180 stroke-[2]" />
                         </button>
-                        <h3 className="text-[17px] font-bold text-[#1e293b] tracking-wide ml-1.5">我的日程</h3>
+                        <h3 className="text-[15px] font-bold text-[#1e293b] tracking-wide ml-1">我的日程</h3>
                       </div>
                       <button 
                         type="button"
-                        className="w-8 h-8 flex items-center justify-center text-[#1e293b] hover:text-[#10B981] transition-colors mr-[-6px]"
+                        className="w-7 h-7 flex items-center justify-center text-[#1e293b] hover:text-[#10B981] transition-colors mr-[-4px]"
                         onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
                       >
-                        <Icons.ArrowRight className="w-[22px] h-[22px] stroke-[2]" />
+                        <Icons.ArrowRight className="w-[20px] h-[20px] stroke-[2]" />
                       </button>
                     </div>
 
@@ -452,23 +453,23 @@ export function OverviewPage() {
                       onMonthChange={setCalendarMonth}
                       disableNavigation={true}
                       weekStartsOn={1} 
-                      className="pointer-events-auto flex flex-col p-0 items-center justify-center"
+                      className="pointer-events-auto flex w-full max-w-[360px] flex-col p-0 items-center justify-center"
                       formatters={{
                         formatWeekdayName: (day) => ['周日','周一','周二','周三','周四','周五','周六'][day.getDay()]
                       }}
                       classNames={{
-                        months: "flex flex-col items-center space-y-0",
-                        month: "space-y-0 relative",
-                        caption: "flex justify-center relative mb-4 shrink-0",
+                        months: "flex w-full flex-col items-center space-y-0",
+                        month: "mx-auto w-auto space-y-0 relative",
+                        caption: "flex justify-center relative mb-1 shrink-0",
                         caption_label: "text-[18px] font-bold text-[#1e293b] tracking-wider",
                         nav: "hidden", // Nav is completely hidden as we use our own block above
-                        table: "border-separate border-spacing-x-0 border-spacing-y-2",
-                        head_row: "flex justify-between mb-2 px-1 gap-1",
-                        head_cell: "text-slate-500 font-normal text-[14px] w-10 text-center font-sans tracking-wide",
+                        table: "mx-auto border-separate border-spacing-x-0 border-spacing-y-0.5",
+                        head_row: "flex justify-between mb-0.5 px-1 gap-1",
+                        head_cell: "text-slate-500 font-normal text-[12px] w-10 text-center font-sans tracking-wide",
                         row: "flex justify-between px-1 gap-1",
-                        cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 h-[40px] w-10 flex flex-col items-center justify-start",
+                        cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 h-[32px] w-10 flex flex-col items-center justify-start",
                         day: cn(
-                          "h-[34px] w-[34px] p-0 font-medium rounded-md transition-all duration-200 flex flex-col items-center justify-center text-[16px] text-slate-700 font-sans tracking-tight",
+                          "h-[30px] w-[30px] p-0 font-medium rounded-md transition-all duration-200 flex flex-col items-center justify-center text-[13px] text-slate-700 font-sans tracking-tight",
                           "aria-selected:bg-[#10B981] aria-selected:text-white"
                         ),
                         today: "text-slate-700",
@@ -483,7 +484,7 @@ export function OverviewPage() {
                           delete buttonProps.modifiers;
 
                           return (
-                            <div className="flex flex-col items-center justify-start w-full h-full relative group pt-0.5">
+                             <div className="flex flex-col items-center justify-start w-full h-full relative group pt-0">
                                <button {...buttonProps} className={cn(props.className, "relative z-10 hover:bg-slate-50 dark:hover:bg-slate-800")} />
                             </div>
                           );
