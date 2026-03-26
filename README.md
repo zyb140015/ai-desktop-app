@@ -37,6 +37,8 @@ npm run dev
 npm run dev:local-api
 npm run typecheck
 npm run build
+npm run pack
+npm run dist:win
 ```
 
 ## 生产环境变量
@@ -50,3 +52,23 @@ VITE_GOADMIN_BASE_URL=https://your-goadmin.example.com
 
 - `VITE_API_BASE_URL`：桌面端 BFF，也就是 `ai-go-service`
 - `VITE_GOADMIN_BASE_URL`：go-admin 资源地址，用于头像等相对资源路径解析
+
+## Windows 打包
+
+安装依赖后，可以直接执行：
+
+```bash
+npm run dist:win
+```
+
+产物默认输出到：
+
+```bash
+release/
+```
+
+当前已补充 `electron-builder` 基础配置，适合本地生成 Windows 安装包。正式上线前还需要继续补：
+
+- 应用图标（ico）
+- 代码签名
+- 自动更新配置（如需要）
