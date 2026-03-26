@@ -38,3 +38,15 @@ npm run dev:local-api
 npm run typecheck
 npm run build
 ```
+
+## 生产环境变量
+
+桌面端上线前至少确认以下变量：
+
+```bash
+VITE_API_BASE_URL=https://your-api.example.com
+VITE_GOADMIN_BASE_URL=https://your-goadmin.example.com
+```
+
+- `VITE_API_BASE_URL`：桌面端 BFF，也就是 `ai-go-service`
+- `VITE_GOADMIN_BASE_URL`：go-admin 资源地址，用于头像等相对资源路径解析
